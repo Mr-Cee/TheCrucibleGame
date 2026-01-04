@@ -1,0 +1,1000 @@
+[gd_scene load_steps=7 format=3 uid="uid://b67ptcs0wuaom"]
+
+[ext_resource type="Script" uid="uid://duue37ceul2eu" path="res://scripts/ui/Home.gd" id="1_q8k43"]
+[ext_resource type="Script" uid="uid://dsrf0yho3x3xx" path="res://scripts/ui/BattlePanel.gd" id="2_qhh6x"]
+[ext_resource type="Script" uid="uid://c7hs3wd6qyjoa" path="res://scripts/ui/CruciblePanel.gd" id="3_dsbsq"]
+[ext_resource type="Script" uid="uid://bg8bd7hdof10m" path="res://scripts/ui/GearPanel.gd" id="4_y282l"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q8k43"]
+bg_color = Color(0.69135684, 0.6913568, 0.6913567, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3366076, 0.33660766, 0.33660737, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="LabelSettings" id="LabelSettings_q8k43"]
+font_size = 12
+
+[node name="Home" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_q8k43")
+
+[node name="RootMargin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="RootVBox" type="VBoxContainer" parent="RootMargin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TopHUDRow" type="HBoxContainer" parent="RootMargin/RootVBox"]
+layout_mode = 2
+
+[node name="CharacterHUD" type="PanelContainer" parent="RootMargin/RootVBox/TopHUDRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CharacterVBox" type="VBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+layout_mode = 2
+text = "CharacterName"
+
+[node name="HPBar" type="ProgressBar" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+layout_mode = 2
+
+[node name="XPBar" type="ProgressBar" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+layout_mode = 2
+
+[node name="CPLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+layout_mode = 2
+text = "CP"
+
+[node name="CurrencyHUD" type="PanelContainer" parent="RootMargin/RootVBox/TopHUDRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CurrencyVBox" type="VBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD"]
+layout_mode = 2
+
+[node name="GoldLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox"]
+layout_mode = 2
+text = "Gold"
+
+[node name="DiamondsLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox"]
+layout_mode = 2
+text = "Diamonds"
+
+[node name="CrystalsLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox"]
+layout_mode = 2
+text = "Crystals"
+
+[node name="BattleSection" type="VBoxContainer" parent="RootMargin/RootVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2_qhh6x")
+
+[node name="DifficultyLabel" type="Label" parent="RootMargin/RootVBox/BattleSection"]
+layout_mode = 2
+text = "Difficulty"
+horizontal_alignment = 1
+
+[node name="EnemyHPBar" type="ProgressBar" parent="RootMargin/RootVBox/BattleSection"]
+layout_mode = 2
+
+[node name="BattleArea" type="Control" parent="RootMargin/RootVBox/BattleSection"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CrucibleRow" type="HBoxContainer" parent="RootMargin/RootVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SpeedBox" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow"]
+layout_mode = 2
+
+[node name="SpeedVBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox"]
+layout_mode = 2
+
+[node name="SpeedLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox/SpeedVBox"]
+layout_mode = 2
+text = "Speed"
+
+[node name="SpeedButton" type="OptionButton" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox/SpeedVBox"]
+layout_mode = 2
+
+[node name="CruciblePanel" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("3_dsbsq")
+
+[node name="VBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel"]
+layout_mode = 2
+
+[node name="CrucibleTitle" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+layout_mode = 2
+text = "Crucible"
+
+[node name="KeysLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+layout_mode = 2
+text = "Keys"
+
+[node name="DrawButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+layout_mode = 2
+text = "Draw"
+
+[node name="CrucibleSideButtons" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow"]
+layout_mode = 2
+
+[node name="UpgradeButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons"]
+layout_mode = 2
+text = "Upgrade"
+
+[node name="FilterButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons"]
+layout_mode = 2
+text = "Auto"
+
+[node name="GearStrip" type="HBoxContainer" parent="RootMargin/RootVBox"]
+layout_mode = 2
+script = ExtResource("4_y282l")
+
+[node name="GearGridPanel" type="PanelContainer" parent="RootMargin/RootVBox/GearStrip"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GearGrid" type="GridContainer" parent="RootMargin/RootVBox/GearStrip/GearGridPanel"]
+layout_mode = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
+columns = 5
+
+[node name="SlotButton1" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton2" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton3" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton4" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton5" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton6" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton7" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton8" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton9" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton10" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton11" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SlotButton12" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+stretch_mode = 0
+
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
+
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch_mode = 5
+
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -23.0
+grow_horizontal = 2
+grow_vertical = 0
+horizontal_alignment = 1
+
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+label_settings = SubResource("LabelSettings_q8k43")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="GearPanelArea" type="PanelContainer" parent="RootMargin/RootVBox/GearStrip"]
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+size_flags_stretch_ratio = 0.0
+
+[node name="GearVBox" type="VBoxContainer" parent="RootMargin/RootVBox/GearStrip/GearPanelArea"]
+layout_mode = 2
+
+[node name="GearPanelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearPanelArea/GearVBox"]
+layout_mode = 2
+
+[node name="OpenGearButton" type="Button" parent="RootMargin/RootVBox/GearStrip/GearPanelArea/GearVBox"]
+layout_mode = 2
+text = "->"
+
+[node name="TownNav" type="PanelContainer" parent="RootMargin/RootVBox"]
+layout_mode = 2
+
+[node name="TownNavRow" type="HBoxContainer" parent="RootMargin/RootVBox/TownNav"]
+layout_mode = 2
+
+[node name="HomeBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+layout_mode = 2
+text = "Home"
+
+[node name="SkillsBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+layout_mode = 2
+text = "Skills"
+
+[node name="ShopBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+layout_mode = 2
+text = "Shop"
+
+[node name="FutureBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+layout_mode = 2
+disabled = true
+text = "Future"
+
+[node name="FutureBtn2" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+layout_mode = 2
+disabled = true
+text = "Future"
+
+[node name="ComparePopup" type="Window" parent="."]
+oversampling_override = 1.0
+visible = false
+
+[node name="RootVBox" type="VBoxContainer" parent="ComparePopup"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CardsRow" type="HBoxContainer" parent="ComparePopup/RootVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="LeftCol" type="VBoxContainer" parent="ComparePopup/RootVBox/CardsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="NewCard" type="PanelContainer" parent="ComparePopup/RootVBox/CardsRow/LeftCol"]
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="ComparePopup/RootVBox/CardsRow/LeftCol/NewCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="NewItemLabel" type="RichTextLabel" parent="ComparePopup/RootVBox/CardsRow/LeftCol/NewCard/Margin"]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LeftButtonsRow" type="HBoxContainer" parent="ComparePopup/RootVBox/CardsRow/LeftCol"]
+layout_mode = 2
+
+[node name="EquipButton" type="Button" parent="ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow"]
+layout_mode = 2
+text = "Equip"
+
+[node name="SellButton" type="Button" parent="ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow"]
+layout_mode = 2
+text = "Sell"
+
+[node name="CloseButton" type="Button" parent="ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow"]
+layout_mode = 2
+text = "Close"
+
+[node name="RightCol" type="VBoxContainer" parent="ComparePopup/RootVBox/CardsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="EquippedCard" type="PanelContainer" parent="ComparePopup/RootVBox/CardsRow/RightCol"]
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="ComparePopup/RootVBox/CardsRow/RightCol/EquippedCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="EquippedItemLabel" type="RichTextLabel" parent="ComparePopup/RootVBox/CardsRow/RightCol/EquippedCard/Margin"]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="AutoPopup" type="Window" parent="."]
+oversampling_override = 1.0
+size = Vector2i(520, 320)
+min_size = Vector2i(520, 320)
+
+[node name="VBox" type="VBoxContainer" parent="AutoPopup"]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TitleLabel" type="Label" parent="AutoPopup/VBox"]
+layout_mode = 2
+text = "Auto/Filter"
+
+[node name="RowBatch" type="HBoxContainer" parent="AutoPopup/VBox"]
+layout_mode = 2
+
+[node name="BatchLabel" type="Label" parent="AutoPopup/VBox/RowBatch"]
+layout_mode = 2
+text = "Keys per batch:"
+
+[node name="BatchOption" type="OptionButton" parent="AutoPopup/VBox/RowBatch"]
+layout_mode = 2
+
+[node name="LockInfoLabel" type="Label" parent="AutoPopup/VBox"]
+layout_mode = 2
+
+[node name="RowRarity" type="HBoxContainer" parent="AutoPopup/VBox"]
+layout_mode = 2
+
+[node name="RarityLabel" type="Label" parent="AutoPopup/VBox/RowRarity"]
+layout_mode = 2
+text = "Keep/Show >:"
+
+[node name="RarityOption" type="OptionButton" parent="AutoPopup/VBox/RowRarity"]
+layout_mode = 2
+
+[node name="AutoSellCheck" type="CheckButton" parent="AutoPopup/VBox"]
+layout_mode = 2
+text = "Auto-sell below threshold"
+
+[node name="CooldownLabel" type="Label" parent="AutoPopup/VBox"]
+layout_mode = 2
+text = "Cooldown: Xs"
+
+[node name="AutoStatusLabel" type="Label" parent="AutoPopup/VBox"]
+layout_mode = 2
+text = "Auto: Off"
+
+[node name="StartStopButton" type="Button" parent="AutoPopup/VBox"]
+layout_mode = 2
+text = "Start Auto"
+
+[node name="CloseButton" type="Button" parent="AutoPopup/VBox"]
+layout_mode = 2
+text = "Close"
