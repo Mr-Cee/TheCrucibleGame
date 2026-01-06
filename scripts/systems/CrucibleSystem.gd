@@ -21,7 +21,8 @@ func roll_item_for_player(p: PlayerModel) -> GearItem:
 
 	item.slot = ROLLABLE_SLOTS[rng.randi_range(0, ROLLABLE_SLOTS.size() - 1)]
 	item.item_level = Catalog.roll_item_level(p.level)
-	var rarity := roll_rarity_for_level(p.crucible_level)
+	item.rarity = roll_rarity_for_level(p.crucible_level)
+
 	item.stats = _roll_stats(item.slot, item.item_level, item.rarity, p.class_id)
 	return item
 
@@ -38,7 +39,7 @@ func roll_rarity_for_level(crucible_level: int) -> int:
 		acc += p
 		if roll <= acc:
 			return int(r)
-
+	print("Here")
 	# Fallback
 	return int(Catalog.Rarity.COMMON)
 
