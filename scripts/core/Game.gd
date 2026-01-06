@@ -62,7 +62,6 @@ func _ready() -> void:
 	SaveManager.init_autosave_hooks()
 	
 	player_changed.connect(_battle_on_player_changed)
-	battle_changed.connect(_battle_on_battle_state_changed)
 
 	_battle_init_if_needed()
 
@@ -76,7 +75,6 @@ func _process(delta: float) -> void:
 		crucible_tick_upgrade_completion()
 	_battle_init_if_needed()
 	_battle_process(delta)
-
 
 func add_gold(amount:int) -> void:
 	player.gold += amount
@@ -137,9 +135,14 @@ func set_battle_state(state: Dictionary) -> void:
 	battle_changed.emit()
 
 func patch_battle_state(patch: Dictionary) -> void:
+	var changed: bool = false
 	for k in patch.keys():
-		battle_state[k] = patch[k]
-	battle_changed.emit()
+		var new_val = patch[k]
+		if battle_state.get(k) != new_val:
+			battle_state[k] = new_val
+			changed = true
+	if changed:
+		battle_changed.emit()
 
 func crucible_draw_cooldown() -> float:
 	return max(0.05, crucible_draw_cooldown_base * crucible_draw_cooldown_mult)
@@ -314,7 +317,7 @@ func _battle_on_player_changed() -> void:
 
 func _battle_on_battle_state_changed() -> void:
 	# If speed changed etc., just refresh UI.
-	battle_changed.emit()
+	pass
 
 func _battle_speed_multiplier() -> float:
 	var idx: int = int(battle_state.get("speed_idx", 0))

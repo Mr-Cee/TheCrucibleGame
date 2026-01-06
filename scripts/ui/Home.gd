@@ -91,6 +91,8 @@ var _vp_count: int = 0
 
 var _batch_running: bool = false
 
+var _hud_ui_accum: float = 0.0
+
 func _fmt_mmss(seconds: int) -> String:
 	seconds = max(0, seconds)
 	var m: int = seconds / 60
@@ -159,6 +161,19 @@ func _ready() -> void:
 	# ... plus your existing HUD refresh hookup ...
 	Game.player_changed.connect(_refresh_hud)
 	_refresh_hud()
+
+func _process(delta: float) -> void:
+	_hud_ui_accum += delta
+	if _hud_ui_accum < 0.10:
+		return
+	_hud_ui_accum = 0.0
+
+	var hp_bar: ProgressBar = $RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HPBar
+	var php: float = float(Game.battle_runtime.get("player_hp", 0.0))
+	var phpmax: float = max(1.0, float(Game.battle_runtime.get("player_hp_max", 1.0)))
+
+	hp_bar.max_value = 100.0
+	hp_bar.value = (php / phpmax) * 100.0
 
 func _on_gear_slot_clicked(slot_id: int, item: GearItem) -> void:
 	# Ignore future slots (they’re disabled anyway, but safe)
@@ -297,8 +312,9 @@ func _refresh_hud() -> void:
 
 	if is_instance_valid(xp_bar):
 		xp_bar.min_value = 0
-		xp_bar.max_value = 100
-		xp_bar.value = float((p.level * 7) % 100)
+		xp_bar.max_value = Game.player.xp_required_for_next_level()
+		xp_bar.value = Game.player.xp
+
 
 	if is_instance_valid(gold_label):
 		gold_label.text = "Gold: %d" % p.gold
@@ -338,30 +354,21 @@ func _on_crucible_draw_pressed() -> void:
 	# Generate all items and queue them for decisions
 	var to_queue: Array[GearItem] = []
 	for i in range(spent):
-		to_queue.append(_crucible.roll_item_for_player(p))
+		var item: GearItem = _crucible.roll_item_for_player(p)
+		to_queue.append(item)
+
+		var xp_gain: int = Catalog.crucible_xp_for_draw(p.level, item.item_level, item.rarity)
+		var levels: int = Game.player.add_xp(xp_gain)
+		if levels > 0:
+			Game.inventory_event.emit("Level Up! Lv.%d" % Game.player.level)
+
+	# Emit once after the whole batch to avoid spamming save/UI
+	Game.player_changed.emit()
 
 	_enqueue_deferred_many(to_queue)
 
 	# Show first queued item immediately
 	await _show_compare_and_wait(_peek_deferred_item(), true)
-
-#func _on_crucible_draw_pressed() -> void:
-	## Manual draw always stops auto
-	#_stop_auto_draw()
-#
-	## If there is a deferred item, resolve it first (no key spent)
-	#if _has_deferred_item():
-		#var it := _peek_deferred_item()
-		#await _show_compare_and_wait(it, true)
-		#return
-#
-	## Normal draw
-	#if not Game.spend_crucible_key():
-		#Game.inventory_event.emit("No keys available.")
-		#return
-#
-	#var item := _crucible.roll_item_for_player(Game.player)
-	#await _show_compare_and_wait(item, false)
 
 func _run_batch_draw(batch: int, token: int) -> void:
 	var p := Game.player
@@ -389,6 +396,13 @@ func _run_batch_draw(batch: int, token: int) -> void:
 
 		var item := _crucible.roll_item_for_player(p)
 		var meets := _rarity_meets_threshold(item.rarity, min_rarity)
+		
+		var xp_gain: int = Catalog.crucible_xp_for_draw(p.level, item.item_level, item.rarity)
+		var levels: int = Game.player.add_xp(xp_gain)
+		Game.player_changed.emit()
+
+		if levels > 0:
+			Game.inventory_event.emit("Level Up! Lv.%d" % Game.player.level)
 
 		if meets:
 			# Show/decide later (queued)

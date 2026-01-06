@@ -5,7 +5,7 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 
 @export var class_id: int = ClassId.WARRIOR
 @export var level: int = 1
-
+@export var xp: int = 0
 @export var gold: int = 0
 @export var crystals: int = 0
 @export var diamonds: int = 0
@@ -42,6 +42,7 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 var crucible_upgrade_paid_stages: int = 0
 var crucible_upgrade_target_level: int = 0 # 0 means "not upgrading"
 var crucible_upgrade_finish_unix: int = 0  # unix seconds; 0 means "no timer running"
+
 
 
 func base_stats() -> Stats:
@@ -112,6 +113,7 @@ func to_dict() -> Dictionary:
 		"crystals": crystals,
 		"time_vouchers": time_vouchers,
 		"level": level,
+		"xp": xp,
 		"class_id": class_id,
 		"crucible_keys": crucible_keys,
 		"crucible_level": crucible_level,
@@ -132,6 +134,7 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.crystals = int(d.get("crystals", 0))
 	p.time_vouchers = int(d.get("time_vouchers", 0))
 	p.level = int(d.get("level", 1))
+	p.xp = int(d.get("xp", 0))
 	p.class_id = int(d.get("class_id", 0))
 	p.crucible_keys = int(d.get("crucible_keys", 0))
 	p.crucible_level = int(d.get("crucible_level", 1))
@@ -167,3 +170,25 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 				p.equipped[slot] = GearItem.from_dict(iv as Dictionary)
 
 	return p
+
+func xp_required_for_next_level() -> int:
+	# Simple exponential curve (tune later).
+	# Level 1 -> 2 should be quick; later levels ramp.
+	return int(round(50.0 * pow(1.18, float(level - 1))))
+
+func add_xp(amount: int) -> int:
+	if amount <= 0:
+		return 0
+
+	var levels_gained: int = 0
+	xp += amount
+
+	while true:
+		var need: int = xp_required_for_next_level()
+		if xp < need:
+			break
+		xp -= need
+		level += 1
+		levels_gained += 1
+
+	return levels_gained

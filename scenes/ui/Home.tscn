@@ -1,8 +1,9 @@
-[gd_scene load_steps=8 format=3 uid="uid://b67ptcs0wuaom"]
+[gd_scene load_steps=9 format=3 uid="uid://b67ptcs0wuaom"]
 
 [ext_resource type="Script" uid="uid://duue37ceul2eu" path="res://scripts/ui/Home.gd" id="1_q8k43"]
 [ext_resource type="Script" uid="uid://dsrf0yho3x3xx" path="res://scripts/ui/BattlePanel.gd" id="2_qhh6x"]
 [ext_resource type="Script" uid="uid://c7hs3wd6qyjoa" path="res://scripts/ui/CruciblePanel.gd" id="3_dsbsq"]
+[ext_resource type="Script" uid="uid://lphcl2pckchy" path="res://scenes/ui/speedbox.gd" id="3_y282l"]
 [ext_resource type="Script" uid="uid://bg8bd7hdof10m" path="res://scripts/ui/GearPanel.gd" id="4_y282l"]
 [ext_resource type="Script" uid="uid://bygie1to68dx5" path="res://scenes/ui/crucible_upgrade_popup.gd" id="5_qhh6x"]
 
@@ -112,6 +113,7 @@ size_flags_vertical = 3
 
 [node name="SpeedBox" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow"]
 layout_mode = 2
+script = ExtResource("3_y282l")
 
 [node name="SpeedVBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox"]
 layout_mode = 2

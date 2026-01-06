@@ -230,3 +230,27 @@ static func crucible_upgrade_time_seconds(current_level: int) -> int:
 	var n: int = max(0, current_level - CRUCIBLE_UPGRADE_TIME_ANCHOR_LEVEL)
 	var secs: float = float(CRUCIBLE_UPGRADE_TIME_BASE) * pow(CRUCIBLE_UPGRADE_TIME_GROWTH, float(n))
 	return int(round(secs))
+
+# --- Crucible XP tuning ---
+const CRUCIBLE_XP_BASE_PER_DRAW: int = 12
+const CRUCIBLE_XP_PER_ITEM_LEVEL: float = 0.50
+
+# Optional: scale XP by rarity (uses same keys as RARITY_STAT_MULT)
+const CRUCIBLE_XP_RARITY_MULT := {
+	Rarity.COMMON: 1.00,
+	Rarity.UNCOMMON: 1.05,
+	Rarity.RARE: 1.15,
+	Rarity.UNIQUE: 1.30,
+	Rarity.MYTHIC: 1.55,
+	Rarity.LEGENDARY: 1.90,
+	Rarity.IMMORTAL: 2.25,
+	Rarity.SUPREME: 2.65,
+	Rarity.AUROUS: 3.10,
+	Rarity.ETERNAL: 3.70,
+}
+
+static func crucible_xp_for_draw(player_level: int, item_level: int, rarity: int) -> int:
+	# Primary driver is "per draw" XP, with mild scaling by item level and rarity.
+	var base: float = float(CRUCIBLE_XP_BASE_PER_DRAW) + float(item_level) * CRUCIBLE_XP_PER_ITEM_LEVEL
+	var mult: float = float(CRUCIBLE_XP_RARITY_MULT.get(rarity, 1.0))
+	return int(round(base * mult))
