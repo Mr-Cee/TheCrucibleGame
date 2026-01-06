@@ -109,10 +109,10 @@ size_flags_vertical = 3
 
 [node name="CrucibleRow" type="HBoxContainer" parent="RootMargin/RootVBox"]
 layout_mode = 2
-size_flags_vertical = 3
 
 [node name="SpeedBox" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow"]
 layout_mode = 2
+size_flags_vertical = 8
 script = ExtResource("3_y282l")
 
 [node name="SpeedVBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox"]
@@ -127,11 +127,13 @@ layout_mode = 2
 
 [node name="CruciblePanel" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow"]
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 6
+size_flags_vertical = 8
 script = ExtResource("3_dsbsq")
 
 [node name="VBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel"]
 layout_mode = 2
+size_flags_vertical = 8
 
 [node name="HeaderRow" type="HBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
 layout_mode = 2
@@ -156,11 +158,16 @@ text = "Keys"
 layout_mode = 2
 
 [node name="DrawButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
 text = "Draw"
 
 [node name="CrucibleSideButtons" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow"]
 layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 8
 
 [node name="UpgradeButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons"]
 layout_mode = 2

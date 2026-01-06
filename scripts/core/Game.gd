@@ -80,6 +80,13 @@ func add_gold(amount:int) -> void:
 	player.gold += amount
 	emit_signal("player_changed")
 
+func add_battle_rewards(gold_amount: int, key_amount: int) -> void:
+	if gold_amount != 0:
+		player.gold += gold_amount
+	if key_amount != 0:
+		player.crucible_keys += key_amount
+	player_changed.emit()
+
 func spend_crucible_key() -> bool:
 	if player.crucible_keys <= 0:
 		return false

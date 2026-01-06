@@ -232,7 +232,7 @@ static func crucible_upgrade_time_seconds(current_level: int) -> int:
 	return int(round(secs))
 
 # --- Crucible XP tuning ---
-const CRUCIBLE_XP_BASE_PER_DRAW: int = 12
+const CRUCIBLE_XP_BASE_PER_DRAW: int = 5
 const CRUCIBLE_XP_PER_ITEM_LEVEL: float = 0.50
 
 # Optional: scale XP by rarity (uses same keys as RARITY_STAT_MULT)
@@ -254,3 +254,34 @@ static func crucible_xp_for_draw(player_level: int, item_level: int, rarity: int
 	var base: float = float(CRUCIBLE_XP_BASE_PER_DRAW) + float(item_level) * CRUCIBLE_XP_PER_ITEM_LEVEL
 	var mult: float = float(CRUCIBLE_XP_RARITY_MULT.get(rarity, 1.0))
 	return int(round(base * mult))
+
+# --- Battle rewards tuning ---
+const BATTLE_GOLD_BASE: int = 5
+const BATTLE_GOLD_PER_LEVEL: int = 2
+const BATTLE_GOLD_PER_STAGE: int = 1
+const BATTLE_GOLD_PER_WAVE: int = 0
+
+const BATTLE_GOLD_BOSS_BONUS: int = 10
+
+const BATTLE_KEYS_PER_WAVE: int = 1
+const BATTLE_KEYS_BOSS_BONUS: int = 2
+
+static func battle_gold_for_wave(difficulty: String, level: int, stage: int, wave: int, is_boss: bool) -> int:
+	# MVP tuning:
+	# - scales gently with level/stage
+	# - boss wave gets a noticeable bump
+	var base: int = 5 + (level - 1) * 2 + (stage - 1)
+	var wave_bonus: int = (wave - 1)  # small ramp 0..4
+	var gold: int = base + wave_bonus
+
+	if is_boss:
+		gold = int(round(float(gold) * 1.50))  # boss bonus (50%)
+	return max(1, gold)
+
+static func battle_keys_for_wave(difficulty: String, level: int, stage: int, wave: int, is_boss: bool) -> int:
+	# Your request: keys after every wave + bonus on boss.
+	# MVP: 1 key per wave; boss gives +1 bonus (total 2 on boss).
+	var keys: int = 1
+	if is_boss:
+		keys += 1
+	return max(0, keys)
