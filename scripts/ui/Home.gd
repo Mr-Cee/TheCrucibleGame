@@ -207,6 +207,29 @@ func show_details(slot_id: int, item: GearItem) -> void:
 
 	compare_popup.popup_centered(Vector2i(520, 420))
 
+func _calc_item_cp_for_slot(slot_id: int, item: GearItem) -> int:
+	if item == null:
+		return 0
+
+	var p: PlayerModel = Game.player
+	if p == null:
+		return 0
+
+	var saved: GearItem = p.equipped.get(slot_id, null)
+
+	# CP with slot empty
+	p.equipped[slot_id] = null
+	var base_cp: int = int(p.combat_power())
+
+	# CP with candidate item equipped
+	p.equipped[slot_id] = item
+	var with_cp: int = int(p.combat_power())
+
+	# Restore original
+	p.equipped[slot_id] = saved
+
+	return with_cp - base_cp
+
 func show_compare(item: GearItem, from_deferred: bool = false) -> void:
 	_popup_mode = PopupMode.COMPARE
 	_pending_item = item
@@ -218,11 +241,33 @@ func show_compare(item: GearItem, from_deferred: bool = false) -> void:
 	new_item_label.bbcode_enabled = true
 	equipped_item_label.bbcode_enabled = true
 
-	new_item_label.text = "[b]New:[/b]\n" + item.to_bbcode()
+	# --- CP calculations (slot contribution) ---
+	var new_cp: int = _calc_item_cp_for_slot(item.slot, item)
+	var eq_cp: int = 0
 	if _equipped_snapshot != null:
-		equipped_item_label.text = "[b]Equipped:[/b]\n" + _equipped_snapshot.to_bbcode()
+		eq_cp = _calc_item_cp_for_slot(item.slot, _equipped_snapshot)
+
+	var delta: int = new_cp - eq_cp
+
+	# Build single-line CP text with colored delta
+	var cp_line: String = "[b]CP:[/b] %d" % new_cp
+	if  delta != 0:
+		var col: String = "00ff66" if delta > 0 else "ff4444"
+		var sign: String = "+" if delta > 0 else ""
+		cp_line += " [color=#%s](%s%d)[/color]" % [col, sign, delta]
+	elif _equipped_snapshot != null and delta == 0:
+		cp_line += " [color=#bbbbbb](+0)[/color]"
+
+	# --- Build BBCode text ---
+	new_item_label.text = "[b]New:[/b]\n%s\n%s" % [cp_line, item.to_bbcode()]
+
+	if _equipped_snapshot != null:
+		equipped_item_label.text = "[b]Equipped:[/b]\n[b]CP:[/b] %d\n%s" % [
+			eq_cp,
+			_equipped_snapshot.to_bbcode()
+		]
 	else:
-		equipped_item_label.text = "[b]Equipped:[/b]\n(None)"
+		equipped_item_label.text = "[b]Equipped:[/b]\n[b]CP:[/b] 0\n(None)"
 
 	# Buttons: compare mode uses equip/sell
 	equip_button.visible = true
