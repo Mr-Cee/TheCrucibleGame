@@ -21,18 +21,26 @@ func roll_item_for_player(p: PlayerModel) -> GearItem:
 
 	item.slot = ROLLABLE_SLOTS[rng.randi_range(0, ROLLABLE_SLOTS.size() - 1)]
 	item.item_level = Catalog.roll_item_level(p.level)
-	item.rarity = _roll_rarity(p.crucible_level)
+	var rarity := roll_rarity_for_level(p.crucible_level)
 	item.stats = _roll_stats(item.slot, item.item_level, item.rarity, p.class_id)
 	return item
 
-func _roll_rarity(crucible_level: int) -> int:
-	var table := Catalog.get_rarity_weights(crucible_level)
-	var rarities := table.keys()
-	var weights: Array = []
-	for r in rarities:
-		weights.append(table[r])
-	var idx := (RNG as RNGService).weighted_pick(rarities, weights)
-	return int(rarities[idx])
+func roll_rarity_for_level(crucible_level: int) -> int:
+	var odds: Dictionary = Catalog.crucible_rarity_odds(crucible_level)
+
+	var roll: float = RNG.randf() # 0..1
+	var acc: float = 0.0
+
+	for r in Catalog.RARITY_DISPLAY_ORDER:
+		var p: float = float(odds.get(r, 0.0))
+		if p <= 0.0:
+			continue
+		acc += p
+		if roll <= acc:
+			return int(r)
+
+	# Fallback
+	return int(Catalog.Rarity.COMMON)
 
 func _pct_roll(rng: RNGService, min_pct: int, max_pct: int) -> float:
 	return float(rng.randi_range(min_pct, max_pct))

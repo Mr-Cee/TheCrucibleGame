@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3 uid="uid://b67ptcs0wuaom"]
+[gd_scene load_steps=8 format=3 uid="uid://b67ptcs0wuaom"]
 
 [ext_resource type="Script" uid="uid://duue37ceul2eu" path="res://scripts/ui/Home.gd" id="1_q8k43"]
 [ext_resource type="Script" uid="uid://dsrf0yho3x3xx" path="res://scripts/ui/BattlePanel.gd" id="2_qhh6x"]
 [ext_resource type="Script" uid="uid://c7hs3wd6qyjoa" path="res://scripts/ui/CruciblePanel.gd" id="3_dsbsq"]
 [ext_resource type="Script" uid="uid://bg8bd7hdof10m" path="res://scripts/ui/GearPanel.gd" id="4_y282l"]
+[ext_resource type="Script" uid="uid://bygie1to68dx5" path="res://scenes/ui/crucible_upgrade_popup.gd" id="5_qhh6x"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q8k43"]
 bg_color = Color(0.69135684, 0.6913568, 0.6913567, 1)
@@ -130,13 +131,27 @@ script = ExtResource("3_dsbsq")
 [node name="VBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel"]
 layout_mode = 2
 
-[node name="CrucibleTitle" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+[node name="HeaderRow" type="HBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CrucibleTitle" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/HeaderRow"]
 layout_mode = 2
 text = "Crucible"
 
-[node name="KeysLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+[node name="LevelStatusLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/HeaderRow"]
+layout_mode = 2
+
+[node name="KeysRow" type="HBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="KeysLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/KeysRow"]
 layout_mode = 2
 text = "Keys"
+
+[node name="KeysStatusLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/KeysRow"]
+layout_mode = 2
 
 [node name="DrawButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
 layout_mode = 2
@@ -945,6 +960,7 @@ size_flags_vertical = 3
 
 [node name="AutoPopup" type="Window" parent="."]
 oversampling_override = 1.0
+position = Vector2i(0, 36)
 size = Vector2i(520, 320)
 min_size = Vector2i(520, 320)
 
@@ -998,3 +1014,140 @@ text = "Start Auto"
 [node name="CloseButton" type="Button" parent="AutoPopup/VBox"]
 layout_mode = 2
 text = "Close"
+
+[node name="CrucibleUpgradePopup" type="Window" parent="."]
+oversampling_override = 1.0
+size = Vector2i(100, 700)
+visible = false
+min_size = Vector2i(0, 700)
+script = ExtResource("5_qhh6x")
+
+[node name="VBox" type="VBoxContainer" parent="CrucibleUpgradePopup"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="TitleLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
+layout_mode = 2
+
+[node name="ProgressLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
+layout_mode = 2
+
+[node name="PaymentHint" type="Label" parent="CrucibleUpgradePopup/VBox"]
+layout_mode = 2
+text = "Pay to unlock upgrade"
+
+[node name="PaymentRow" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PaymentBar" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox/PaymentRow"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PayButton" type="Button" parent="CrucibleUpgradePopup/VBox/PaymentRow"]
+custom_minimum_size = Vector2(164, 0)
+layout_mode = 2
+
+[node name="OddsHeader" type="Label" parent="CrucibleUpgradePopup/VBox"]
+layout_mode = 2
+
+[node name="OddsScroll" type="ScrollContainer" parent="CrucibleUpgradePopup/VBox"]
+custom_minimum_size = Vector2(0, 260)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="OddsGrid" type="GridContainer" parent="CrucibleUpgradePopup/VBox/OddsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 6
+columns = 3
+
+[node name="UpgradeProgress" type="ProgressBar" parent="CrucibleUpgradePopup/VBox"]
+visible = false
+layout_mode = 2
+
+[node name="TimeLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
+visible = false
+layout_mode = 2
+
+[node name="VoucherRow" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox"]
+layout_mode = 2
+
+[node name="UseVoucherButton" type="Button" parent="CrucibleUpgradePopup/VBox/VoucherRow"]
+custom_minimum_size = Vector2(132, 0)
+layout_mode = 2
+text = "Use Voucher"
+
+[node name="VoucherLabel" type="Label" parent="CrucibleUpgradePopup/VBox/VoucherRow"]
+layout_mode = 2
+text = "Time Vouchers: X"
+
+[node name="ButtonsRow" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="CrucibleUpgradePopup/VBox/ButtonsRow"]
+layout_mode = 2
+text = "Close"
+
+[node name="VoucherPopup" type="Window" parent="."]
+oversampling_override = 1.0
+position = Vector2i(0, 36)
+always_on_top = true
+
+[node name="VBox" type="VBoxContainer" parent="VoucherPopup"]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TitleLabel" type="Label" parent="VoucherPopup/VBox"]
+layout_mode = 2
+text = "Speed Up"
+
+[node name="InfoLabel" type="Label" parent="VoucherPopup/VBox"]
+layout_mode = 2
+text = "Remaing: 25:00 | You have 12 Vouchers"
+
+[node name="Row" type="HBoxContainer" parent="VoucherPopup/VBox"]
+layout_mode = 2
+
+[node name="MinusButton" type="Button" parent="VoucherPopup/VBox/Row"]
+layout_mode = 2
+text = "-"
+
+[node name="CountEdit" type="LineEdit" parent="VoucherPopup/VBox/Row"]
+layout_mode = 2
+placeholder_text = "0"
+
+[node name="PlusButton" type="Button" parent="VoucherPopup/VBox/Row"]
+layout_mode = 2
+text = "+"
+
+[node name="MaxButton" type="Button" parent="VoucherPopup/VBox/Row"]
+layout_mode = 2
+text = "Max"
+
+[node name="UseLabel" type="Label" parent="VoucherPopup/VBox"]
+layout_mode = 2
+text = "Speed Up: 00:00"
+
+[node name="ButtonsRow" type="HBoxContainer" parent="VoucherPopup/VBox"]
+layout_mode = 2
+
+[node name="UseButton" type="Button" parent="VoucherPopup/VBox/ButtonsRow"]
+layout_mode = 2
+text = "Use"
+
+[node name="CancelButton" type="Button" parent="VoucherPopup/VBox/ButtonsRow"]
+layout_mode = 2
+text = "Cancel"
