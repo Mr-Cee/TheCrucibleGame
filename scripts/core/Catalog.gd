@@ -319,7 +319,7 @@ const BATTLE_DIFFICULTY_SCALARS: Dictionary = {
 
 # Growth inside a difficulty as you climb stages.
 # step = (level-1)*stages_per_level + (stage-1)
-const BATTLE_WITHIN_DIFFICULTY_GROWTH: float = 1.06
+const BATTLE_WITHIN_DIFFICULTY_GROWTH: float = 1.03
 
 static func battle_difficulty_scalars(diff: String) -> Dictionary:
 	return BATTLE_DIFFICULTY_SCALARS.get(diff, BATTLE_DIFFICULTY_SCALARS["Easy"])

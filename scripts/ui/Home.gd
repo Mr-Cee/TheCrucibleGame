@@ -767,7 +767,6 @@ func _vp_apply() -> void:
 		voucher_popup.visible = false
 
 func _on_cp_label_gui_input(ev: InputEvent) -> void:
-	print("Tapped")
 	var pressed: bool = false
 
 	if ev is InputEventMouseButton:

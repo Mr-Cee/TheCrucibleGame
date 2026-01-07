@@ -5,6 +5,9 @@ signal player_changed
 signal inventory_event(message:String)
 signal battle_changed
 
+signal combat_log_added(line: String)
+
+
 #===================================================================================================
 
 var player: PlayerModel
@@ -25,6 +28,7 @@ var battle_runtime: Dictionary = {
 	"enemy_hp": 0.0,
 	"enemy_hp_max": 0.0,
 	"is_boss": false,
+	"status_text": "",
 }
 
 var _battle_inited: bool = false
@@ -45,6 +49,14 @@ var _p_avoid: float = 0.0       # percent points
 var _e_atk: float = 1.0
 var _e_def: float = 0.0
 var _e_aps: float = 0.8
+
+var _defeat_pause_remaining: float = 0.0
+const DEFEAT_PAUSE_SECONDS: float = 1.5
+
+const COMBAT_LOG_MAX_LINES: int = 120
+var combat_log: Array[String] = []
+
+
 
 #===================================================================================================
 
@@ -336,6 +348,13 @@ func _battle_speed_multiplier() -> float:
 func _battle_process(delta: float) -> void:
 	if not _battle_inited:
 		return
+		
+	# If defeated, freeze battle briefly so UI can show 0 HP.
+	if _defeat_pause_remaining > 0.0:
+		_defeat_pause_remaining -= delta  # unscaled real-time
+		if _defeat_pause_remaining <= 0.0:
+			_finish_defeat_reset()
+		return
 
 	var dt: float = delta * _battle_speed_multiplier()
 
@@ -360,42 +379,66 @@ func _battle_process(delta: float) -> void:
 			return
 
 func _battle_player_attack() -> void:
+	var was_crit: bool = false
+	var hits: int = 1
+
 	var dmg: float = _p_atk
 
-	# Crit (crit chance is 0..1)
+	# Crit
 	if (RNG as RNGService).randf() < _p_crit:
+		was_crit = true
 		dmg *= 1.5
 
-	# Combo: percent points; allow >100
+	# Combo (percent points; allow >100)
 	var cc: float = max(0.0, _p_combo) / 100.0
 	var guaranteed: int = int(floor(cc))
 	var extra_chance: float = cc - float(guaranteed)
 
-	var hits: int = 1 + guaranteed
+	hits = 1 + guaranteed
 	if (RNG as RNGService).randf() < extra_chance:
 		hits += 1
 
 	var total: float = dmg
 	if hits > 1:
-		# extra hits at 50% damage (tune later)
-		total += float(hits - 1) * (dmg * 0.5)
+		total += float(hits - 1) * (dmg * 0.5) # extra hits at 50%
 
 	var dealt: float = _apply_defense(total, _e_def)
 	battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
 
+	# --- Combat log line ---
+	var tags: Array[String] = []
+	if was_crit:
+		tags.append("CRIT")
+	if hits > 1:
+		tags.append("COMBO x%d" % hits)
+
+	var tag_txt: String = ""
+	if tags.size() > 0:
+		tag_txt = " [color=#FFD24A](%s)[/color]" % ", ".join(tags)
+
+	log_combat("[color=#7CFF7C]You[/color] hit for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
+
 func _battle_enemy_attack() -> void:
 	var dmg: float = _e_atk
 
-	# Avoid (percent points)
+	# Avoid
 	if (RNG as RNGService).randf() < (clamp(_p_avoid, 0.0, 100.0) / 100.0):
+		log_combat("[color=#FF8A8A]Enemy[/color] attacks — [color=#7FB0FF]Avoided[/color]")
 		return
 
-	# Block (percent points) reduces damage heavily
+	var blocked: bool = false
 	if (RNG as RNGService).randf() < (clamp(_p_block, 0.0, 100.0) / 100.0):
+		blocked = true
 		dmg *= 0.30
 
 	var dealt: float = _apply_defense(dmg, _p_def)
 	battle_runtime["player_hp"] = max(0.0, float(battle_runtime["player_hp"]) - dealt)
+
+	var tag_txt: String = ""
+	if blocked:
+		tag_txt = " [color=#7FB0FF](BLOCK)[/color]"
+
+	log_combat("[color=#FF8A8A]Enemy[/color] hit you for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
 
 func _apply_defense(raw: float, defense: float) -> float:
 	# Diminishing returns: dmg * (100 / (100 + def))
@@ -416,6 +459,13 @@ func _battle_on_enemy_defeated() -> void:
 	add_gold(gold_gain)
 	player.crucible_keys += key_gain
 	player_changed.emit()
+	
+	log_combat("[color=#CFCFCF]Wave cleared[/color]%s — +%d gold, +%d keys" % [
+		(" [color=#FFD24A](BOSS)[/color]" if is_boss else ""),
+		gold_gain,
+		key_gain
+	])
+
 
 	# Advance progression using Catalog (tunable)
 	var next: Dictionary = Catalog.battle_advance_progression(diff, lvl, stg, wav)
@@ -428,17 +478,19 @@ func _battle_on_enemy_defeated() -> void:
 	_battle_spawn_enemy(true)
 
 func _battle_on_player_defeated() -> void:
-	# Reset to wave 1 and retry
-	battle_state["wave"] = 1
-	battle_changed.emit() # progression change; okay to save
+	# Set HP to 0 and pause so UI can show defeat.
+	battle_runtime["player_hp"] = 0.0
+	battle_runtime["status_text"] = "Defeated!"
+	_defeat_pause_remaining = DEFEAT_PAUSE_SECONDS
+	log_combat("[color=#FF4444][b]Defeated![/b][/color]")
 
+
+	# Stop any accumulated swings from firing immediately after reset.
 	_p_atk_accum = 0.0
 	_e_atk_accum = 0.0
 
-	battle_runtime["player_hp_max"] = _p_hp_max
-	battle_runtime["player_hp"] = _p_hp_max
-	
-	print("Defeated")
+	# Emit once so label updates immediately if you’re also signal-driven.
+	battle_changed.emit()
 
 	_battle_spawn_enemy(true)
 
@@ -571,3 +623,27 @@ func dev_set_battle_position(diff: String, level: int, stage: int, wave: int) ->
 	# Request save if your Game exposes it (or SaveManager hooks will catch battle_changed)
 	if has_method("request_save"):
 		call("request_save")
+
+func _finish_defeat_reset() -> void:
+	_defeat_pause_remaining = 0.0
+	battle_runtime["status_text"] = ""
+
+	# Reset to wave 1 and retry
+	battle_state["wave"] = 1
+	battle_changed.emit() # progression changed (autosave ok)
+
+	# Restore player HP and respawn enemy for the reset wave
+	_battle_recompute_player_combat()
+	battle_runtime["player_hp_max"] = _p_hp_max
+	battle_runtime["player_hp"] = _p_hp_max
+
+	_battle_spawn_enemy(true)
+
+func log_combat(line: String) -> void:
+	combat_log.append(line)
+	if combat_log.size() > COMBAT_LOG_MAX_LINES:
+		combat_log.pop_front()
+	combat_log_added.emit(line)
+
+func combat_log_text() -> String:
+	return "\n".join(combat_log)
