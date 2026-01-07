@@ -313,35 +313,98 @@ const BATTLE_DIFFICULTY_ORDER: Array[String] = [
 	"Void VI",
 	"Void VII",
 	"Void VIII",
-	"Void VX",
+	"Void IX",
 	"Void X",
 	"Eternal",
 	# Add later: "Nightmare", "Hell", etc.
 ]
 
-# Per-difficulty stat multipliers. These are intentionally aggressive.
-# Tune freely once you see feel in-game.
-const BATTLE_DIFFICULTY_SCALARS: Dictionary = {
-	"Easy":       {"hp": 1.0,   "atk": 1.0,   "def": 1.0},
-	"Hard":       {"hp": 4.0,   "atk": 4.0,   "def": 2.5},
-	"Nightmare":  {"hp": 18.0,  "atk": 18.0,  "def": 12.0},
-	"Hell":       {"hp": 80.0,  "atk": 90.0,  "def": 70.0},
-	"Abyss":      {"hp": 200.0,  "atk": 400.0,  "def": 250.0},
-	"Apocolypse": {"hp": 400.0,  "atk": 750.0,  "def": 500.0},
-	"Void":       {"hp": 700.0, "atk": 1000.0, "def": 750.0},
-	"Eternal":    {"hp": 1000.0,  "atk": 1350.0,  "def": 1000.0},
-}
+# --- Battle difficulty scaling (formula-based) ---
+# Everything is derived from difficulty index + level + stage + wave.
 
-# Growth inside a difficulty as you climb stages.
-# step = (level-1)*stages_per_level + (stage-1)
-const BATTLE_WITHIN_DIFFICULTY_GROWTH: float = 1.03
+# Base enemy stats at Easy / Lv1 / Stage1 / Wave1 (tune freely)
+const ENEMY_BASE_HP: float = 80.0
+const ENEMY_BASE_ATK: float = 8.0
+const ENEMY_BASE_DEF: float = 1.5
 
-static func battle_difficulty_scalars(diff: String) -> Dictionary:
-	return BATTLE_DIFFICULTY_SCALARS.get(diff, BATTLE_DIFFICULTY_SCALARS["Easy"])
+# Difficulty tier growth per step in BATTLE_DIFFICULTY_ORDER.
+# These are intentionally “chunky” so each named tier feels meaningful.
+const DIFF_HP_GROWTH: float = 1.55
+const DIFF_ATK_GROWTH: float = 1.70
+const DIFF_DEF_GROWTH: float = 1.55
+
+# Within a difficulty: levels and stages should ramp noticeably
+const LEVEL_HP_GROWTH: float = 1.18
+const LEVEL_ATK_GROWTH: float = 1.22
+const LEVEL_DEF_GROWTH: float = 1.18
+
+const STAGE_HP_GROWTH: float = 1.08
+const STAGE_ATK_GROWTH: float = 1.10
+const STAGE_DEF_GROWTH: float = 1.08
+
+# Wave ramp inside a stage (Wave 5 will also get boss multipliers)
+const WAVE_HP_GROWTH: float = 1.05
+const WAVE_ATK_GROWTH: float = 1.06
+const WAVE_DEF_GROWTH: float = 1.05
+
+# Boss wave multipliers (wave 5)
+const BOSS_HP_MULT: float = 2.35
+const BOSS_ATK_MULT: float = 1.70
+const BOSS_DEF_MULT: float = 1.12
+
+# Optional: stage “gateway” bosses (stage 5 and stage 10 bosses are extra spicy)
+const GATEWAY_BOSS_MULT: float = 1.20
+const FINAL_STAGE_BOSS_MULT: float = 1.35  # stage 10 boss additional
+
+
+#static func battle_difficulty_scalars(diff: String) -> Dictionary:
+	#return BATTLE_DIFFICULTY_SCALARS.get(diff, BATTLE_DIFFICULTY_SCALARS["Easy"])
+
 
 static func battle_difficulty_index(diff: String) -> int:
 	var idx: int = BATTLE_DIFFICULTY_ORDER.find(diff)
 	return 0 if idx < 0 else idx
+
+static func battle_enemy_multipliers(diff: String, level: int, stage: int, wave: int, is_boss: bool) -> Dictionary:
+	level = max(1, level)
+	stage = max(1, stage)
+	wave = max(1, wave)
+
+	var tier: int = battle_difficulty_index(diff)
+
+	var hp_mult: float = pow(DIFF_HP_GROWTH, float(tier))
+	var atk_mult: float = pow(DIFF_ATK_GROWTH, float(tier))
+	var def_mult: float = pow(DIFF_DEF_GROWTH, float(tier))
+
+	hp_mult *= pow(LEVEL_HP_GROWTH, float(level - 1))
+	atk_mult *= pow(LEVEL_ATK_GROWTH, float(level - 1))
+	def_mult *= pow(LEVEL_DEF_GROWTH, float(level - 1))
+
+	hp_mult *= pow(STAGE_HP_GROWTH, float(stage - 1))
+	atk_mult *= pow(STAGE_ATK_GROWTH, float(stage - 1))
+	def_mult *= pow(STAGE_DEF_GROWTH, float(stage - 1))
+
+	hp_mult *= pow(WAVE_HP_GROWTH, float(wave - 1))
+	atk_mult *= pow(WAVE_ATK_GROWTH, float(wave - 1))
+	def_mult *= pow(WAVE_DEF_GROWTH, float(wave - 1))
+
+	# Boss wave (wave 5)
+	if is_boss:
+		hp_mult *= BOSS_HP_MULT
+		atk_mult *= BOSS_ATK_MULT
+		def_mult *= BOSS_DEF_MULT
+
+		# Optional: “gateway” boss bumps
+		if stage == 5 or stage == 10:
+			hp_mult *= GATEWAY_BOSS_MULT
+			atk_mult *= GATEWAY_BOSS_MULT
+			def_mult *= GATEWAY_BOSS_MULT
+		if stage == 10:
+			hp_mult *= FINAL_STAGE_BOSS_MULT
+			atk_mult *= FINAL_STAGE_BOSS_MULT
+			def_mult *= FINAL_STAGE_BOSS_MULT
+
+	return {"hp": hp_mult, "atk": atk_mult, "def": def_mult}
 
 # Optional: per-difficulty overrides (can leave empty for now).
 const BATTLE_DIFFICULTY_RULES: Dictionary = {

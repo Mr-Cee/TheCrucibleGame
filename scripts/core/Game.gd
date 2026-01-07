@@ -565,52 +565,22 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 	var is_boss: bool = (wav == Catalog.BATTLE_WAVES_PER_STAGE)
 	battle_runtime["is_boss"] = is_boss
 
-	# --- Base enemy stats (Easy Lv1 Stage1 baseline) ---
-	var base_hp: float = 80.0
-	var base_atk: float = 8.0
-	var base_def: float = 1.5
+	var m: Dictionary = Catalog.battle_enemy_multipliers(diff, lvl, stg, wav, is_boss)
 
-	# --- Within-difficulty growth (level+stage) ---
-	var step: int = (lvl - 1) * Catalog.BATTLE_STAGES_PER_LEVEL + (stg - 1)
-	var within: float = pow(Catalog.BATTLE_WITHIN_DIFFICULTY_GROWTH, float(step))
-
-	# --- Difficulty-tier multiplier ---
-	var scalars: Dictionary = Catalog.battle_difficulty_scalars(diff)
-	var diff_hp: float = float(scalars.get("hp", 1.0))
-	var diff_atk: float = float(scalars.get("atk", 1.0))
-	var diff_def: float = float(scalars.get("def", 1.0))
-
-	# --- Gateway boss tuning per spec: stage 5 and 10 bosses are harder ---
-	var gateway: float = 1.0
-	if is_boss and (stg == 5 or stg == 10):
-		gateway *= 1.25
-	# Final boss of the level (Stage 10 boss) is extra punishing
-	if is_boss and stg == 10:
-		gateway *= 1.35
-
-	# --- Boss tuning (general) ---
-	var boss_hp: float = 1.0
-	var boss_atk: float = 1.0
-	var boss_def: float = 1.0
-	if is_boss:
-		boss_hp = 2.3
-		boss_atk = 1.6
-		boss_def = 1.1
-		_e_aps = 0.7
-	else:
-		_e_aps = 0.9
-
-	# --- Final computed stats ---
-	var hp: float = base_hp * within * diff_hp * boss_hp * gateway
-	var atk: float = base_atk * within * diff_atk * boss_atk * gateway
-	var def: float = base_def * within * diff_def * boss_def * gateway
-
-	_e_atk = max(1.0, atk)
-	_e_def = max(0.0, def)
+	var hp: float = Catalog.ENEMY_BASE_HP * float(m["hp"])
+	var atk: float = Catalog.ENEMY_BASE_ATK * float(m["atk"])
+	var def: float = Catalog.ENEMY_BASE_DEF * float(m["def"])
 
 	battle_runtime["enemy_hp_max"] = hp
 	if reset_hp:
 		battle_runtime["enemy_hp"] = hp
+
+	_e_atk = max(1.0, atk)
+	_e_def = max(0.0, def)
+
+	# If you tune enemy attack speed elsewhere, keep your existing logic:
+	# _e_aps = is_boss ? 0.7 : 0.9
+
 
 func _battle_recompute_player_combat() -> void:
 	# Base values (tune later)
