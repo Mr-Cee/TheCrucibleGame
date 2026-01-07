@@ -304,6 +304,30 @@ const BATTLE_DIFFICULTY_ORDER: Array[String] = [
 	# Add later: "Nightmare", "Hell", etc.
 ]
 
+# Per-difficulty stat multipliers. These are intentionally aggressive.
+# Tune freely once you see feel in-game.
+const BATTLE_DIFFICULTY_SCALARS: Dictionary = {
+	"Easy":       {"hp": 1.0,   "atk": 1.0,   "def": 1.0},
+	"Hard":       {"hp": 4.0,   "atk": 4.0,   "def": 2.5},
+	"Nightmare":  {"hp": 18.0,  "atk": 18.0,  "def": 12.0},
+	"Hell":       {"hp": 80.0,  "atk": 90.0,  "def": 70.0},
+	"Abyss":      {"hp": 200.0,  "atk": 400.0,  "def": 250.0},
+	"Apocolypse": {"hp": 400.0,  "atk": 750.0,  "def": 500.0},
+	"Void":       {"hp": 700.0, "atk": 1000.0, "def": 750.0},
+	"Eternal":    {"hp": 1000.0,  "atk": 1350.0,  "def": 1000.0},
+}
+
+# Growth inside a difficulty as you climb stages.
+# step = (level-1)*stages_per_level + (stage-1)
+const BATTLE_WITHIN_DIFFICULTY_GROWTH: float = 1.06
+
+static func battle_difficulty_scalars(diff: String) -> Dictionary:
+	return BATTLE_DIFFICULTY_SCALARS.get(diff, BATTLE_DIFFICULTY_SCALARS["Easy"])
+
+static func battle_difficulty_index(diff: String) -> int:
+	var idx: int = BATTLE_DIFFICULTY_ORDER.find(diff)
+	return 0 if idx < 0 else idx
+
 # Optional: per-difficulty overrides (can leave empty for now).
 const BATTLE_DIFFICULTY_RULES: Dictionary = {
 	# "Easy": {"levels": 10, "stages": 10, "waves": 5},
