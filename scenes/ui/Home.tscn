@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://b67ptcs0wuaom"]
+[gd_scene load_steps=10 format=3 uid="uid://b67ptcs0wuaom"]
 
 [ext_resource type="Script" uid="uid://duue37ceul2eu" path="res://scripts/ui/Home.gd" id="1_q8k43"]
 [ext_resource type="Script" uid="uid://dsrf0yho3x3xx" path="res://scripts/ui/BattlePanel.gd" id="2_qhh6x"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://lphcl2pckchy" path="res://scenes/ui/speedbox.gd" id="3_y282l"]
 [ext_resource type="Script" uid="uid://bg8bd7hdof10m" path="res://scripts/ui/GearPanel.gd" id="4_y282l"]
 [ext_resource type="Script" uid="uid://bygie1to68dx5" path="res://scenes/ui/crucible_upgrade_popup.gd" id="5_qhh6x"]
+[ext_resource type="Script" uid="uid://bgq4wivjcuh04" path="res://scenes/ui/DevPopup.gd" id="7_y282l"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q8k43"]
 bg_color = Color(0.69135684, 0.6913568, 0.6913567, 1)
@@ -69,6 +70,7 @@ layout_mode = 2
 
 [node name="CPLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
 layout_mode = 2
+mouse_filter = 1
 text = "CP"
 
 [node name="CurrencyHUD" type="PanelContainer" parent="RootMargin/RootVBox/TopHUDRow"]
@@ -1160,3 +1162,67 @@ text = "Use"
 [node name="CancelButton" type="Button" parent="VoucherPopup/VBox/ButtonsRow"]
 layout_mode = 2
 text = "Cancel"
+
+[node name="DevPopup" type="Window" parent="."]
+oversampling_override = 1.0
+visible = false
+script = ExtResource("7_y282l")
+
+[node name="VBox" type="VBoxContainer" parent="DevPopup"]
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="TitleLabel" type="Label" parent="DevPopup/VBox"]
+layout_mode = 2
+text = "Dev Tools"
+
+[node name="GiveRow" type="HBoxContainer" parent="DevPopup/VBox"]
+layout_mode = 2
+
+[node name="GiveSelect" type="OptionButton" parent="DevPopup/VBox/GiveRow"]
+layout_mode = 2
+
+[node name="AmountEdit" type="LineEdit" parent="DevPopup/VBox/GiveRow"]
+layout_mode = 2
+placeholder_text = "Amount"
+
+[node name="GiveButton" type="Button" parent="DevPopup/VBox/GiveRow"]
+layout_mode = 2
+text = "Give"
+
+[node name="Separator1" type="HSeparator" parent="DevPopup/VBox"]
+layout_mode = 2
+
+[node name="BattleTitle" type="Label" parent="DevPopup/VBox"]
+layout_mode = 2
+text = "Set Battle Position"
+
+[node name="BattleRow" type="HBoxContainer" parent="DevPopup/VBox"]
+layout_mode = 2
+
+[node name="DifficultySelect" type="OptionButton" parent="DevPopup/VBox/BattleRow"]
+layout_mode = 2
+
+[node name="LevelSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow"]
+layout_mode = 2
+
+[node name="StageSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow"]
+layout_mode = 2
+
+[node name="WaveSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow"]
+layout_mode = 2
+
+[node name="SetBattleButton" type="Button" parent="DevPopup/VBox/BattleRow"]
+layout_mode = 2
+text = "Set"
+
+[node name="BattlePreview" type="Label" parent="DevPopup/VBox"]
+layout_mode = 2
+text = "Preview: Easy - Lv 1 - Stage1 - Wave 1"
+
+[node name="Separator2" type="HSeparator" parent="DevPopup/VBox"]
+layout_mode = 2
+
+[node name="CloseButton" type="Button" parent="DevPopup/VBox"]
+layout_mode = 2
+text = "Close"

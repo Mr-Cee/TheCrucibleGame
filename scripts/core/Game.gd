@@ -525,3 +525,21 @@ func _battle_advance_progression() -> void:
 	battle_state["level"] = int(next["level"])
 	battle_state["stage"] = int(next["stage"])
 	battle_state["wave"] = int(next["wave"])
+
+func dev_set_battle_position(diff: String, level: int, stage: int, wave: int) -> void:
+	patch_battle_state({
+		"difficulty": diff,
+		"level": level,
+		"stage": stage,
+		"wave": wave,
+	})
+
+	# Force battle runtime to reinitialize to the new state
+	_battle_inited = false
+	_p_atk_accum = 0.0
+	_e_atk_accum = 0.0
+	_battle_init_if_needed()
+
+	# Request save if your Game exposes it (or SaveManager hooks will catch battle_changed)
+	if has_method("request_save"):
+		call("request_save")

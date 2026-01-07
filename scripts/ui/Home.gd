@@ -53,6 +53,7 @@ extends Control
 @onready var vp_use: Button = $VoucherPopup/VBox/ButtonsRow/UseButton
 @onready var vp_cancel: Button = $VoucherPopup/VBox/ButtonsRow/CancelButton
 
+@onready var dev_popup: Window = $DevPopup
 
 #----------------------------------------------------------------
 
@@ -99,6 +100,11 @@ func _fmt_mmss(seconds: int) -> String:
 	var s: int = seconds % 60
 	return "%d:%02d" % [m, s]
 
+var _dev_tap_count: int = 0
+var _dev_tap_deadline_ms: int = 0
+
+const DEV_TAPS_REQUIRED: int = 7
+const DEV_TAP_WINDOW_MS: int = 1500
 
 #-------------------------------------------------------------------------
 
@@ -109,6 +115,11 @@ func _ready() -> void:
 	sell_button.pressed.connect(_on_sell_pressed)
 	#unequip_button.pressed.connect(_on_unequip_pressed)
 	close_button.pressed.connect(_on_close_pressed)
+	dev_popup.visible = false
+
+	if cp_label:
+		cp_label.gui_input.connect(_on_cp_label_gui_input)
+
 	
 	# Connect Crucible draw signal
 	if crucible_panel.has_signal("draw_pressed"):
@@ -754,3 +765,29 @@ func _vp_apply() -> void:
 	# If upgrade completed, close popup
 	if not Game.crucible_is_upgrading():
 		voucher_popup.visible = false
+
+func _on_cp_label_gui_input(ev: InputEvent) -> void:
+	print("Tapped")
+	var pressed: bool = false
+
+	if ev is InputEventMouseButton:
+		pressed = ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT
+	elif ev is InputEventScreenTouch:
+		pressed = ev.pressed
+
+	if not pressed:
+		return
+
+	var now: int = Time.get_ticks_msec()
+	if now > _dev_tap_deadline_ms:
+		_dev_tap_count = 0
+
+	_dev_tap_count += 1
+	_dev_tap_deadline_ms = now + DEV_TAP_WINDOW_MS
+
+	if _dev_tap_count >= DEV_TAPS_REQUIRED:
+		_dev_tap_count = 0
+		if dev_popup and dev_popup.has_method("popup_and_refresh"):
+			dev_popup.call("popup_and_refresh")
+		elif dev_popup:
+			dev_popup.popup_centered(Vector2i(620, 360))
