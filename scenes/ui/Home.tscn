@@ -105,13 +105,24 @@ horizontal_alignment = 1
 [node name="EnemyHPBar" type="ProgressBar" parent="RootMargin/RootVBox/BattleSection"]
 layout_mode = 2
 
-[node name="ResultLabel" type="Label" parent="RootMargin/RootVBox/BattleSection"]
+[node name="LogControls" type="HBoxContainer" parent="RootMargin/RootVBox/BattleSection"]
 layout_mode = 2
-size_flags_vertical = 1
+
+[node name="LogFilter" type="OptionButton" parent="RootMargin/RootVBox/BattleSection/LogControls"]
+layout_mode = 2
+
+[node name="CompactToggle" type="CheckButton" parent="RootMargin/RootVBox/BattleSection/LogControls"]
+layout_mode = 2
+text = "Compact"
+
+[node name="ClearLogButton" type="Button" parent="RootMargin/RootVBox/BattleSection/LogControls"]
+layout_mode = 2
+text = "Clear"
 
 [node name="CombatLogScroll" type="ScrollContainer" parent="RootMargin/RootVBox/BattleSection"]
 layout_mode = 2
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="CombatLog" type="RichTextLabel" parent="RootMargin/RootVBox/BattleSection/CombatLogScroll"]
 layout_mode = 2

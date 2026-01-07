@@ -7,6 +7,8 @@ signal battle_changed
 
 signal combat_log_added(line: String)
 
+signal combat_log_entry_added(entry: Dictionary)
+signal combat_log_cleared
 
 #===================================================================================================
 
@@ -55,8 +57,18 @@ const DEFEAT_PAUSE_SECONDS: float = 1.5
 
 const COMBAT_LOG_MAX_LINES: int = 120
 var combat_log: Array[String] = []
+const COMBAT_LOG_MAX_ENTRIES: int = 200
+var combat_log_entries: Array[Dictionary] = []
 
+# User toggle; effective compact mode will also auto-enable at high speed
+var _combat_log_compact_user: bool = false
 
+# Aggregation buffers (used when compact mode is effective)
+var _agg_player_hits: Dictionary = {"count": 0, "dmg": 0, "crits": 0, "combos": 0}
+var _agg_enemy_hits: Dictionary = {"count": 0, "dmg": 0, "blocks": 0, "avoids": 0}
+var _agg_rewards: Dictionary = {"gold": 0, "keys": 0, "waves": 0, "boss_waves": 0}
+var _agg_flush_accum: float = 0.0
+const AGG_FLUSH_INTERVAL: float = 0.35
 
 #===================================================================================================
 
@@ -357,6 +369,12 @@ func _battle_process(delta: float) -> void:
 		return
 
 	var dt: float = delta * _battle_speed_multiplier()
+	
+	# Accumulate real-time for aggregation flush
+	_agg_flush_accum += delta
+	if combat_log_compact_effective():
+		_combat_log_flush(false)
+
 
 	_p_atk_accum += dt
 	_e_atk_accum += dt
@@ -406,24 +424,34 @@ func _battle_player_attack() -> void:
 	battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
 
 	# --- Combat log line ---
-	var tags: Array[String] = []
-	if was_crit:
-		tags.append("CRIT")
-	if hits > 1:
-		tags.append("COMBO x%d" % hits)
+	if combat_log_compact_effective():
+		_agg_player_hits["count"] = int(_agg_player_hits["count"]) + 1
+		_agg_player_hits["dmg"] = int(_agg_player_hits["dmg"]) + int(round(dealt))
+		if was_crit: _agg_player_hits["crits"] = int(_agg_player_hits["crits"]) + 1
+		if hits > 1: _agg_player_hits["combos"] = int(_agg_player_hits["combos"]) + 1
+	else:
+		var tags: Array[String] = []
+		if was_crit: tags.append("CRIT")
+		if hits > 1: tags.append("COMBO x%d" % hits)
+		var tag_txt: String = ""
+		if tags.size() > 0:
+			tag_txt = " [color=#FFD24A](%s)[/color]" % ", ".join(tags)
 
-	var tag_txt: String = ""
-	if tags.size() > 0:
-		tag_txt = " [color=#FFD24A](%s)[/color]" % ", ".join(tags)
+		var sev: String = "normal"
+		if was_crit: sev = "crit"
+		elif hits > 1: sev = "combo"
 
-	log_combat("[color=#7CFF7C]You[/color] hit for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
+		log_combat("player", sev, "[color=#7CFF7C]You[/color] hit for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
 
 func _battle_enemy_attack() -> void:
 	var dmg: float = _e_atk
 
 	# Avoid
 	if (RNG as RNGService).randf() < (clamp(_p_avoid, 0.0, 100.0) / 100.0):
-		log_combat("[color=#FF8A8A]Enemy[/color] attacks — [color=#7FB0FF]Avoided[/color]")
+		if combat_log_compact_effective():
+			_agg_enemy_hits["avoids"] = int(_agg_enemy_hits["avoids"]) + 1
+		else:
+			log_combat("enemy", "avoid", "[color=#FF8A8A]Enemy[/color] attacks — [color=#7FB0FF](AVOID)[/color]")
 		return
 
 	var blocked: bool = false
@@ -438,7 +466,17 @@ func _battle_enemy_attack() -> void:
 	if blocked:
 		tag_txt = " [color=#7FB0FF](BLOCK)[/color]"
 
-	log_combat("[color=#FF8A8A]Enemy[/color] hit you for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
+	if combat_log_compact_effective():
+		_agg_enemy_hits["count"] = int(_agg_enemy_hits["count"]) + 1
+		_agg_enemy_hits["dmg"] = int(_agg_enemy_hits["dmg"]) + int(round(dealt))
+		if blocked: _agg_enemy_hits["blocks"] = int(_agg_enemy_hits["blocks"]) + 1
+	else:
+		tag_txt = ""
+		var sev: String = "normal"
+		if blocked:
+			tag_txt = " [color=#7FB0FF](BLOCK)[/color]"
+			sev = "block"
+		log_combat("enemy", sev, "[color=#FF8A8A]Enemy[/color] hit you for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
 
 func _apply_defense(raw: float, defense: float) -> float:
 	# Diminishing returns: dmg * (100 / (100 + def))
@@ -460,21 +498,45 @@ func _battle_on_enemy_defeated() -> void:
 	player.crucible_keys += key_gain
 	player_changed.emit()
 	
-	log_combat("[color=#CFCFCF]Wave cleared[/color]%s — +%d gold, +%d keys" % [
-		(" [color=#FFD24A](BOSS)[/color]" if is_boss else ""),
-		gold_gain,
-		key_gain
-	])
-
-
+	if combat_log_compact_effective():
+		_agg_rewards["gold"] = int(_agg_rewards["gold"]) + gold_gain
+		_agg_rewards["keys"] = int(_agg_rewards["keys"]) + key_gain
+		_agg_rewards["waves"] = int(_agg_rewards["waves"]) + 1
+		if is_boss:
+			_agg_rewards["boss_waves"] = int(_agg_rewards["boss_waves"]) + 1
+	else:
+		log_combat("reward", "reward",
+			"[color=#CFCFCF]Wave cleared[/color]%s — +%d gold, +%d keys" % [
+				(" [color=#FFD24A](BOSS)[/color]" if is_boss else ""),
+				gold_gain,
+				key_gain
+			]
+		)
 	# Advance progression using Catalog (tunable)
 	var next: Dictionary = Catalog.battle_advance_progression(diff, lvl, stg, wav)
+	
+	# OPTIONAL: flush any compact aggregation before we potentially wipe
+	if combat_log_compact_effective():
+		_combat_log_flush(true)
+
+	# Clear combat log when finishing boss wave and moving to next stage
+	if is_boss:
+		clear_combat_log()
+		# (Optional) add a header line so the new stage isn’t “silent”
+		log_combat("system", "system",
+			"[color=#CFCFCF]Entering[/color] %s - Lv %d - Stage %d" % [
+				String(next.get("difficulty", diff)),
+				int(next.get("level", lvl)),
+				int(next.get("stage", stg + 1))
+			]
+		)
+	
 	patch_battle_state(next)
 
 	# Full heal between waves for MVP
 	battle_runtime["player_hp_max"] = _p_hp_max
 	battle_runtime["player_hp"] = _p_hp_max
-
+	_combat_log_flush(true)
 	_battle_spawn_enemy(true)
 
 func _battle_on_player_defeated() -> void:
@@ -482,8 +544,9 @@ func _battle_on_player_defeated() -> void:
 	battle_runtime["player_hp"] = 0.0
 	battle_runtime["status_text"] = "Defeated!"
 	_defeat_pause_remaining = DEFEAT_PAUSE_SECONDS
-	log_combat("[color=#FF4444][b]Defeated![/b][/color]")
-
+	if combat_log_compact_effective():
+		_combat_log_flush(true)
+	log_combat("system", "defeat", "[color=#FF4444][b]Defeated![/b][/color]")
 
 	# Stop any accumulated swings from firing immediately after reset.
 	_p_atk_accum = 0.0
@@ -491,7 +554,6 @@ func _battle_on_player_defeated() -> void:
 
 	# Emit once so label updates immediately if you’re also signal-driven.
 	battle_changed.emit()
-
 	_battle_spawn_enemy(true)
 
 func _battle_spawn_enemy(reset_hp: bool) -> void:
@@ -598,6 +660,7 @@ func _battle_advance_progression() -> void:
 	var lvl: int = int(battle_state.get("level", 1))
 	var stage: int = int(battle_state.get("stage", 1))
 	var wave: int = int(battle_state.get("wave", 1))
+	
 
 	var next: Dictionary = Catalog.battle_advance_progression(diff, lvl, stage, wave)
 
@@ -636,14 +699,107 @@ func _finish_defeat_reset() -> void:
 	_battle_recompute_player_combat()
 	battle_runtime["player_hp_max"] = _p_hp_max
 	battle_runtime["player_hp"] = _p_hp_max
-
+	clear_combat_log()
 	_battle_spawn_enemy(true)
 
-func log_combat(line: String) -> void:
-	combat_log.append(line)
-	if combat_log.size() > COMBAT_LOG_MAX_LINES:
-		combat_log.pop_front()
-	combat_log_added.emit(line)
+#func log_combat(line: String) -> void:
+	#combat_log.append(line)
+	#if combat_log.size() > COMBAT_LOG_MAX_LINES:
+		#combat_log.pop_front()
+	#combat_log_added.emit(line)
 
 func combat_log_text() -> String:
 	return "\n".join(combat_log)
+
+func set_combat_log_compact_user(enabled: bool) -> void:
+	_combat_log_compact_user = enabled
+
+func combat_log_compact_effective() -> bool:
+	# Auto-compact at high speed (>= 5x), or if user explicitly enabled it.
+	if _combat_log_compact_user:
+		return true
+	return _battle_speed_multiplier() >= 5.0
+
+func clear_combat_log() -> void:
+	combat_log_entries.clear()
+	combat_log_cleared.emit()
+
+func get_combat_log_entries() -> Array[Dictionary]:
+	# Return a shallow copy so UI can iterate safely.
+	return combat_log_entries.duplicate()
+
+func _log_add(category: String, severity: String, bbcode_line: String) -> void:
+	var entry := {
+		"t": Time.get_ticks_msec(),
+		"cat": category,      # "player" | "enemy" | "reward" | "system"
+		"sev": severity,      # "normal" | "crit" | "combo" | "block" | "avoid" | "defeat" | "reward" | "system"
+		"bb": bbcode_line,
+	}
+	combat_log_entries.append(entry)
+	if combat_log_entries.size() > COMBAT_LOG_MAX_ENTRIES:
+		combat_log_entries.pop_front()
+	combat_log_entry_added.emit(entry)
+
+func log_combat(category: String, severity: String, message_bbcode: String) -> void:
+	# This is the public API battle code calls.
+	# message_bbcode should NOT include trailing newline.
+	_log_add(category, severity, message_bbcode)
+
+func _combat_log_flush(force: bool) -> void:
+	# Flush aggregated lines if anything pending.
+	if not force and _agg_flush_accum < AGG_FLUSH_INTERVAL:
+		return
+
+	_agg_flush_accum = 0.0
+
+	# Player hits
+	if int(_agg_player_hits["count"]) > 0:
+		var c: int = int(_agg_player_hits["count"])
+		var dmg: int = int(_agg_player_hits["dmg"])
+		var crits: int = int(_agg_player_hits["crits"])
+		var combos: int = int(_agg_player_hits["combos"])
+
+		var tags: Array[String] = []
+		if crits > 0: tags.append("CRIT x%d" % crits)
+		if combos > 0: tags.append("COMBO x%d" % combos)
+		var tag_txt: String = ""
+		if tags.size() > 0:
+			tag_txt = " [color=#FFD24A](%s)[/color]" % ", ".join(tags)
+
+		log_combat("player", "normal", "[color=#7CFF7C]You[/color] dealt [b]%d[/b] damage (%d hits)%s" % [dmg, c, tag_txt])
+
+		_agg_player_hits = {"count": 0, "dmg": 0, "crits": 0, "combos": 0}
+
+	# Enemy hits
+	if int(_agg_enemy_hits["count"]) > 0 or int(_agg_enemy_hits["avoids"]) > 0:
+		var hits: int = int(_agg_enemy_hits["count"])
+		var dmg2: int = int(_agg_enemy_hits["dmg"])
+		var blocks: int = int(_agg_enemy_hits["blocks"])
+		var avoids: int = int(_agg_enemy_hits["avoids"])
+
+		var parts: Array[String] = []
+		if hits > 0:
+			parts.append("hit for [b]%d[/b] (%d hits)" % [dmg2, hits])
+		if blocks > 0:
+			parts.append("[color=#7FB0FF]BLOCK x%d[/color]" % blocks)
+		if avoids > 0:
+			parts.append("[color=#7FB0FF]AVOID x%d[/color]" % avoids)
+
+		log_combat("enemy", "normal", "[color=#FF8A8A]Enemy[/color] %s" % " | ".join(parts))
+
+		_agg_enemy_hits = {"count": 0, "dmg": 0, "blocks": 0, "avoids": 0}
+
+	# Rewards
+	if int(_agg_rewards["waves"]) > 0:
+		var g: int = int(_agg_rewards["gold"])
+		var k: int = int(_agg_rewards["keys"])
+		var w: int = int(_agg_rewards["waves"])
+		var bw: int = int(_agg_rewards["boss_waves"])
+
+		var boss_txt: String = ""
+		if bw > 0:
+			boss_txt = " [color=#FFD24A](Boss clears: %d)[/color]" % bw
+
+		log_combat("reward", "reward", "[color=#CFCFCF]Rewards[/color]: +%d gold, +%d keys (%d waves)%s" % [g, k, w, boss_txt])
+
+		_agg_rewards = {"gold": 0, "keys": 0, "waves": 0, "boss_waves": 0}

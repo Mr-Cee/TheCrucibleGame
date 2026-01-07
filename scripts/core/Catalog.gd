@@ -297,9 +297,24 @@ const BATTLE_DIFFICULTY_ORDER: Array[String] = [
 	"Hard",
 	"Nightmare",
 	"Hell",
-	"Abyss",
-	"Apocolypse",
-	"Void",
+	"Abyss I",
+	"Abyss II",
+	"Abyss II",
+	"Apocolypse I",
+	"Apocolypse II",
+	"Apocolypse III",
+	"Apocolypse IV",
+	"Apocolypse V",
+	"Void I",
+	"Void II",
+	"Void III",
+	"Void IV",
+	"Void V",
+	"Void VI",
+	"Void VII",
+	"Void VIII",
+	"Void VX",
+	"Void X",
 	"Eternal",
 	# Add later: "Nightmare", "Hell", etc.
 ]
@@ -366,6 +381,7 @@ static func battle_advance_progression(diff: String, level: int, stage: int, wav
 	if wave > max_waves:
 		wave = 1
 		stage += 1
+		
 
 		if stage > max_stages:
 			stage = 1
