@@ -410,8 +410,8 @@ func _battle_on_enemy_defeated() -> void:
 	var wav: int = int(battle_state.get("wave", 1))
 	var is_boss: bool = (wav == Catalog.BATTLE_WAVES_PER_STAGE)
 
-	var gold_gain: int = Catalog.battle_wave_gold(diff, lvl, stg, wav, is_boss)
-	var key_gain: int = Catalog.battle_wave_keys(diff, lvl, stg, wav, is_boss)
+	var gold_gain: int = Catalog.battle_gold_for_wave(diff, lvl, stg, wav, is_boss)
+	var key_gain: int = Catalog.battle_keys_for_wave(diff, lvl, stg, wav, is_boss)
 
 	add_gold(gold_gain)
 	player.crucible_keys += key_gain
