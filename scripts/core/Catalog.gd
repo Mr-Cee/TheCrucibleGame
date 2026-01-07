@@ -285,3 +285,75 @@ static func battle_keys_for_wave(difficulty: String, level: int, stage: int, wav
 	if is_boss:
 		keys += 1
 	return max(0, keys)
+
+# --- Battle progression tuning ---
+const BATTLE_WAVES_PER_STAGE: int = 5
+const BATTLE_STAGES_PER_LEVEL: int = 10
+const BATTLE_LEVELS_PER_DIFFICULTY: int = 10
+
+# Ordered list controls difficulty progression.
+const BATTLE_DIFFICULTY_ORDER: Array[String] = [
+	"Easy",
+	"Hard",
+	"Nightmare",
+	"Hell",
+	"Abyss",
+	"Apocolypse",
+	"Void",
+	"Eternal",
+	# Add later: "Nightmare", "Hell", etc.
+]
+
+# Optional: per-difficulty overrides (can leave empty for now).
+const BATTLE_DIFFICULTY_RULES: Dictionary = {
+	# "Easy": {"levels": 10, "stages": 10, "waves": 5},
+	# "Hard": {"levels": 10, "stages": 10, "waves": 5},
+}
+
+static func battle_rules_for_difficulty(diff: String) -> Dictionary:
+	var r: Dictionary = BATTLE_DIFFICULTY_RULES.get(diff, {})
+	return {
+		"levels": int(r.get("levels", BATTLE_LEVELS_PER_DIFFICULTY)),
+		"stages": int(r.get("stages", BATTLE_STAGES_PER_LEVEL)),
+		"waves": int(r.get("waves", BATTLE_WAVES_PER_STAGE)),
+	}
+
+static func battle_next_difficulty(diff: String) -> String:
+	var idx: int = BATTLE_DIFFICULTY_ORDER.find(diff)
+	if idx == -1:
+		return BATTLE_DIFFICULTY_ORDER[0]
+	if idx + 1 >= BATTLE_DIFFICULTY_ORDER.size():
+		# Stay at max difficulty for now (or loop if you prefer)
+		return BATTLE_DIFFICULTY_ORDER[BATTLE_DIFFICULTY_ORDER.size() - 1]
+	return BATTLE_DIFFICULTY_ORDER[idx + 1]
+
+static func battle_advance_progression(diff: String, level: int, stage: int, wave: int) -> Dictionary:
+	level = max(1, level)
+	stage = max(1, stage)
+	wave = max(1, wave)
+
+	var rules: Dictionary = battle_rules_for_difficulty(diff)
+	var max_levels: int = int(rules["levels"])
+	var max_stages: int = int(rules["stages"])
+	var max_waves: int = int(rules["waves"])
+
+	# Advance wave -> stage -> level -> difficulty
+	wave += 1
+	if wave > max_waves:
+		wave = 1
+		stage += 1
+
+		if stage > max_stages:
+			stage = 1
+			level += 1
+
+			if level > max_levels:
+				level = 1
+				diff = battle_next_difficulty(diff)
+
+	return {
+		"difficulty": diff,
+		"level": level,
+		"stage": stage,
+		"wave": wave,
+	}
