@@ -113,7 +113,6 @@ func _ready() -> void:
 	Game.inventory_event.connect(_on_inventory_event)
 	equip_button.pressed.connect(_on_equip_pressed)
 	sell_button.pressed.connect(_on_sell_pressed)
-	#unequip_button.pressed.connect(_on_unequip_pressed)
 	close_button.pressed.connect(_on_close_pressed)
 	dev_popup.visible = false
 
@@ -145,7 +144,6 @@ func _ready() -> void:
 		crucible_upgrade_popup.call("popup_and_refresh")
 	)
 
-
 	auto_popup.visible = false
 	filter_button.toggle_mode = true
 	
@@ -153,7 +151,6 @@ func _ready() -> void:
 	
 	voucher_popup.visible = false
 
-	
 	vp_minus.pressed.connect(func() -> void: _vp_adjust(-1))
 	vp_plus.pressed.connect(func() -> void: _vp_adjust(1))
 	
@@ -165,13 +162,11 @@ func _ready() -> void:
 	vp_count_edit.text_submitted.connect(func(_t:String) -> void: _vp_from_edit())
 	vp_count_edit.focus_exited.connect(_vp_from_edit)
 
-
-
-
 	# If your CruciblePanel emits draw_pressed, keep that hookup as you already have it
 	# ... plus your existing HUD refresh hookup ...
-	Game.player_changed.connect(_refresh_hud)
-	_refresh_hud()
+	Game.player_changed.connect(_refresh_hud_nonbattle)
+	_refresh_hud_nonbattle()
+
 
 func _process(delta: float) -> void:
 	_hud_ui_accum += delta
@@ -179,12 +174,20 @@ func _process(delta: float) -> void:
 		return
 	_hud_ui_accum = 0.0
 
-	var hp_bar: ProgressBar = $RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HPBar
+	if not is_instance_valid(hp_bar):
+		return
+
+	var phpmax_raw: float = float(Game.battle_runtime.get("player_hp_max", 0.0))
+	if phpmax_raw <= 0.0:
+		# Battle not initialized yet; don't stomp the bar.
+		return
+
 	var php: float = float(Game.battle_runtime.get("player_hp", 0.0))
-	var phpmax: float = max(1.0, float(Game.battle_runtime.get("player_hp_max", 1.0)))
+	var phpmax: float = max(1.0, phpmax_raw)
 
 	hp_bar.max_value = 100.0
 	hp_bar.value = (php / phpmax) * 100.0
+
 
 func _on_gear_slot_clicked(slot_id: int, item: GearItem) -> void:
 	# Ignore future slots (they’re disabled anyway, but safe)
@@ -351,26 +354,20 @@ func _on_close_pressed() -> void:
 func _on_inventory_event(msg: String) -> void:
 	print(msg)
 	
-func _refresh_hud() -> void:
+func _refresh_hud_nonbattle() -> void:
 	var p := Game.player
 
-	# If you have these nodes in your HUD, update them. If not, remove the lines.
 	if is_instance_valid(name_label):
 		name_label.text = "Hero"
 	if is_instance_valid(cp_label):
 		cp_label.text = "CP: %d" % p.combat_power()
 
-	# Placeholder bars until you wire real HP/XP
-	if is_instance_valid(hp_bar):
-		hp_bar.min_value = 0
-		hp_bar.max_value = 100
-		hp_bar.value = 100
+	# DO NOT touch hp_bar here. HP is driven by battle_runtime in _process().
 
 	if is_instance_valid(xp_bar):
 		xp_bar.min_value = 0
 		xp_bar.max_value = Game.player.xp_required_for_next_level()
 		xp_bar.value = Game.player.xp
-
 
 	if is_instance_valid(gold_label):
 		gold_label.text = "Gold: %d" % p.gold
@@ -379,13 +376,12 @@ func _refresh_hud() -> void:
 	if is_instance_valid(crystals_label):
 		crystals_label.text = "Crystals: %d" % p.crystals
 
-	# Update CruciblePanel label
-	#if is_instance_valid(crucible_panel) and crucible_panel.has_method("set_keys_text"):
 	var pending: int = 0
 	if "deferred_gear" in p:
 		pending = int(p.deferred_gear.size())
 
 	crucible_panel.call("set_crucible_hud", p.crucible_keys, p.crucible_level, int(p.crucible_batch), pending)
+
 
 func _on_crucible_draw_pressed() -> void:
 	# Manual draw stops auto
