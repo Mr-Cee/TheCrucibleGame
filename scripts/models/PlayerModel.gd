@@ -42,6 +42,10 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 @export var premium_offline_unlocked: bool = false          # permanent bundle (+2h cap)
 @export var battlepass_expires_unix: int = 0                # temporary (+2h cap while active)
 
+# ============== Class / Skills (MVP) ==================
+# Tracks the player's selected node in the class tree (e.g. "warrior", "knight", etc.)
+@export var class_def_id: String = ""
+
 @export var skill_levels: Dictionary = {}                   #skill_id -> int (>=1)
 @export var equipped_active_skills: Array[String] = []      #List of skill_ids(active)
 @export var equipped_passive_skills: Array[String] = []     #list of skill_ids(passive)
@@ -50,10 +54,6 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 var crucible_upgrade_paid_stages: int = 0
 var crucible_upgrade_target_level: int = 0 # 0 means "not upgrading"
 var crucible_upgrade_finish_unix: int = 0  # unix seconds; 0 means "no timer running"
-
-
-func _init() -> void:
-	ensure_class_and_skills_initialized()
 
 func base_stats() -> Stats:
 	var s := Stats.new()
@@ -99,7 +99,7 @@ func total_stats() -> Stats:
 	#Conversion RatesL
 	s.hp += s.str * 5.0
 	s.atk += s.str * 0.5
-	s.atk += s.in * 0.6
+	s.atk += s.int_ * 0.6
 	s.atk += s.agi * 0.55
 	s.atk_spd += s.agi * 0.05
 	
@@ -136,7 +136,7 @@ func to_dict() -> Dictionary:
 		"xp": xp,
 		"class_id": class_id,
 		"class_def_id": class_def_id,
-		"skill_levls": skill_levels,
+		"skill_levels": skill_levels,
 		"equipped_active_skills": equipped_active_skills,
 		"equipped_passive_skills": equipped_passive_skills,
 		"crucible_keys": crucible_keys,
@@ -166,7 +166,7 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.level = int(d.get("level", 1))
 	p.xp = int(d.get("xp", 0))
 	p.class_id = int(d.get("class_id", 0))
-	p.class_def_id = int(d.get("class_def_id", ""))
+	p.class_def_id = String(d.get("class_def_id", ""))
 	
 	var slv: Variant = d.get("skill_levels", {})
 	p.skill_levels = {}
@@ -261,7 +261,7 @@ func ensure_class_and_skills_initialized() -> void:
 			
 	#seed starter skills if missing (new save or older save)
 	if skill_levels.is_empty():
-		skill_levels = SkillsCatalog.starting_active_loadout_for_class(class_id)
+		skill_levels = SkillCatalog.starting_skill_levels_for_class(class_id)
 		
 	if equipped_active_skills.is_empty():
 		equipped_active_skills = SkillCatalog.starting_active_loadout_for_class(class_id)
@@ -283,7 +283,7 @@ func set_skill_level(skill_id: String, lvl: int) -> void:
 	else:
 		skill_levels[skill_id] = lvl
 		
-func _unique_skill_ids(ids: Array[String]) -> void:
+func _unique_skill_ids(ids: Array[String]) -> Array[String]:
 	var seen := {}
 	var out: Array[String] = []
 	for id in ids:
@@ -293,7 +293,7 @@ func _unique_skill_ids(ids: Array[String]) -> void:
 		out.append(id)
 	return out
 	
-func passive_statts_from_class_and_skills() -> Stats:
+func passive_stats_from_class_and_skills() -> Stats:
 	#Flat passive from the select class node + passice skills (equipped + granted)
 	var out := Stats.new()
 	
