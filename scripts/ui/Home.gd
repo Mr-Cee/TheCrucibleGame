@@ -436,52 +436,76 @@ func _run_batch_draw(batch: int, token: int) -> void:
 		await _show_compare_and_wait(_peek_deferred_item(), true)
 		return
 
-	# Spend the whole batch up front (this is what makes "2 keys at once" feel correct).
+	# Spend the whole batch up front.
 	var spent: int = Game.spend_crucible_keys(batch)
 	if spent <= 0:
 		Game.inventory_event.emit("Auto stopped: no keys.")
 		_stop_auto_draw()
 		return
 
-	# Generate items; queue those that require player decision, auto-sell the rest.
+	# Generate items immediately; enqueue ONLY the ones we intend to show.
 	var to_queue: Array[GearItem] = []
 
 	for i in range(spent):
 		if not _auto_running or token != _auto_cancel_token:
 			return
 
-		var item := _crucible.roll_item_for_player(p)
-		var meets := _rarity_meets_threshold(item.rarity, min_rarity)
-		
+		var item: GearItem = _crucible.roll_item_for_player(p)
+
+		# XP per draw
 		var xp_gain: int = Catalog.crucible_xp_for_draw(p.level, item.item_level, item.rarity)
 		var levels: int = Game.player.add_xp(xp_gain)
 		Game.player_changed.emit()
-
 		if levels > 0:
 			Game.inventory_event.emit("Level Up! Lv.%d" % Game.player.level)
 
+		var meets: bool = _rarity_meets_threshold(item.rarity, min_rarity)
+
 		if meets:
-			# Show/decide later (queued)
+			# Meets filter: show/decide
 			to_queue.append(item)
 		else:
-			# Below threshold
+			# Below filter: never show when a filter is active.
+			# If auto-sell: sell; otherwise silently skip (discard)
 			if auto_sell:
 				Game.sell_item(item)
-			else:
-				# Auto-sell off: player must decide, so queue it too
-				to_queue.append(item)
+			# else: do nothing (silently ignore)
 
-		# Cooldown between draws (battlepass-ready)
-		if i < spent - 1:
-			await get_tree().create_timer(Game.crucible_draw_cooldown()).timeout
-
-	# Enqueue all decision items (persisted via player_changed/save).
+	# Enqueue all decision items.
 	if to_queue.size() > 0:
 		_enqueue_deferred_many(to_queue)
 
-	# Immediately present the next deferred item (if any), and wait for a decision.
+	# Present the next deferred item (if any), and wait for a decision.
 	if _has_deferred_item() and _auto_running and token == _auto_cancel_token:
 		await _show_compare_and_wait(_peek_deferred_item(), true)
+
+func _run_auto_loop(token: int) -> void:
+	# Continuous auto: keep drawing batches until stopped or out of keys.
+	while _auto_running and token == _auto_cancel_token:
+		var p := Game.player
+		var batch: int = int(p.crucible_batch)
+
+		# Enforce locks; if locked, fallback to 1
+		if not _is_batch_unlocked(batch, int(p.crucible_level)):
+			batch = 1
+
+		# If no keys, stop auto
+		if int(p.crucible_keys) <= 0:
+			Game.inventory_event.emit("Auto stopped: no keys.")
+			_stop_auto_draw()
+			return
+
+		# Run one batch instantly (no per-item cooldown)
+		await _run_batch_draw(batch, token)
+
+		if not _auto_running or token != _auto_cancel_token:
+			return
+
+		# Cooldown BETWEEN batches (applies to batch=1 as well)
+		var cd: float = float(Game.crucible_draw_cooldown())
+		cd = max(0.05, cd)
+		await get_tree().create_timer(cd).timeout
+
 
 func _rarity_meets_threshold(rarity_id: int, min_rarity_id: int) -> bool:
 	var r_idx := RARITY_ORDER.find(rarity_id)
@@ -613,30 +637,6 @@ func _on_start_stop_auto_pressed() -> void:
 		
 	#Close the popup when starting auto
 	auto_popup.visible = false
-
-func _run_auto_loop(token: int) -> void:
-	# Continuous auto: keep drawing batches until stopped or out of keys.
-	while _auto_running and token == _auto_cancel_token:
-		var p := Game.player
-		var batch: int = int(p.crucible_batch)
-
-		# Enforce locks; if locked, fallback to 1
-		if not _is_batch_unlocked(batch, p.crucible_level):
-			batch = 1
-
-		# If no keys, stop auto
-		if p.crucible_keys <= 0:
-			Game.inventory_event.emit("Auto stopped: no keys.")
-			_stop_auto_draw()
-			return
-
-		# Run one batch
-		await _run_batch_draw(batch, token)
-
-		# Small delay between batches so it doesn’t “instantly restart”
-		if not _auto_running or token != _auto_cancel_token:
-			return
-		await get_tree().create_timer(0.10).timeout
 
 func _has_deferred_item() -> bool:
 	return Game.player.deferred_gear.size() > 0
