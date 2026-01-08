@@ -135,6 +135,32 @@ const CRUCIBLE_UPGRADE_TIME_TABLE: Dictionary = {
 	# Add more explicit overrides here anytime you want.
 }
 
+# --- Crucible upgrade gold tuning (per payment stage) ---
+# "current_level" means upgrading from Lv.N to Lv.N+1.
+# Each payment stage within the SAME level costs the SAME amount.
+const CRUCIBLE_UPGRADE_GOLD_TABLE: Dictionary = {
+	1: 15000,   # Lv1 -> Lv2 (1 stage)
+	# Add more overrides anytime you want.
+}
+
+# Used when not in table
+const CRUCIBLE_UPGRADE_GOLD_BASE: int = 15000          # anchor cost (per stage)
+const CRUCIBLE_UPGRADE_GOLD_GROWTH: float = 1.70      # exponential growth per level
+const CRUCIBLE_UPGRADE_GOLD_ANCHOR_LEVEL: int = 1     # growth starts after this level
+
+static func crucible_upgrade_stage_cost_gold(current_level: int) -> int:
+	current_level = max(1, current_level)
+
+	# Explicit early-game overrides
+	if CRUCIBLE_UPGRADE_GOLD_TABLE.has(current_level):
+		return int(CRUCIBLE_UPGRADE_GOLD_TABLE[current_level])
+
+	# Exponential tail
+	var n: int = max(0, current_level - CRUCIBLE_UPGRADE_GOLD_ANCHOR_LEVEL)
+	var cost: float = float(CRUCIBLE_UPGRADE_GOLD_BASE) * pow(CRUCIBLE_UPGRADE_GOLD_GROWTH, float(n))
+	return int(round(cost))
+
+
 const CRUCIBLE_UPGRADE_TIME_BASE: int = 45 * 60   # base used when not in table (seconds)
 const CRUCIBLE_UPGRADE_TIME_GROWTH: float = 1.25  # exponential growth per level beyond base_anchor
 const CRUCIBLE_UPGRADE_TIME_ANCHOR_LEVEL: int = 4 # growth starts after this level (uses base)

@@ -506,7 +506,6 @@ func _run_auto_loop(token: int) -> void:
 		cd = max(0.05, cd)
 		await get_tree().create_timer(cd).timeout
 
-
 func _rarity_meets_threshold(rarity_id: int, min_rarity_id: int) -> bool:
 	var r_idx := RARITY_ORDER.find(rarity_id)
 	var m_idx := RARITY_ORDER.find(min_rarity_id)

@@ -201,12 +201,9 @@ func crucible_required_payment_stages(current_level: int) -> int:
 	return 5
 
 func crucible_stage_cost_gold(current_level: int, stage_index: int) -> int:
-	# stage_index is 0..required-1
-	# MVP scalable formula. Tweak as desired.
-	var base: float = 250.0
-	var level_scale: float = pow(1.35, float(current_level - 1))
-	var stage_scale: float = 1.0 + float(stage_index) * 0.20
-	return int(round(base * level_scale * stage_scale))
+	# stage_index intentionally ignored: all stages within a level cost the same.
+	return Catalog.crucible_upgrade_stage_cost_gold(current_level)
+
 
 func crucible_upgrade_time_seconds(current_level: int) -> int:
 	return Catalog.crucible_upgrade_time_seconds(current_level)
@@ -580,7 +577,6 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 
 	# If you tune enemy attack speed elsewhere, keep your existing logic:
 	# _e_aps = is_boss ? 0.7 : 0.9
-
 
 func _battle_recompute_player_combat() -> void:
 	# Base values (tune later)
