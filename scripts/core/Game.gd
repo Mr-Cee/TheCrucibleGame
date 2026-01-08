@@ -47,6 +47,18 @@ var _p_combo: float = 0.0       # percent points (can exceed 100)
 var _p_block: float = 0.0       # percent points
 var _p_avoid: float = 0.0       # percent points
 
+#Damage multipliers derived from stats
+var _p_crit_mult: float = 1.5          # default: 50% crit damage
+var _p_combo_extra_mult: float = 0.5   # default: extra hit does 50% damage
+var _p_regen: float = 0.0              #HP per second
+var _p_skill_cd_mult: float = 1.0      # multiplier on skill cooldown, INT reduces this
+
+# Cache of players computed total stats (so skills can scale off STR/INT/AGI, etc.)
+var _p_stats: Stats = null
+
+# Active skill cooldown runtime (skill_id -> remaining seconds)
+var _skill_cd: Dictionary = {}
+
 # Enemy combat
 var _e_atk: float = 1.0
 var _e_def: float = 0.0
@@ -204,7 +216,6 @@ func crucible_stage_cost_gold(current_level: int, stage_index: int) -> int:
 	# stage_index intentionally ignored: all stages within a level cost the same.
 	return Catalog.crucible_upgrade_stage_cost_gold(current_level)
 
-
 func crucible_upgrade_time_seconds(current_level: int) -> int:
 	return Catalog.crucible_upgrade_time_seconds(current_level)
 
@@ -324,6 +335,7 @@ func _battle_init_if_needed() -> void:
 
 	_battle_inited = true
 	_battle_recompute_player_combat()
+	_skills_sync_loadout()
 
 	battle_runtime["player_hp_max"] = _p_hp_max
 	battle_runtime["player_hp"] = _p_hp_max
@@ -333,11 +345,11 @@ func _battle_init_if_needed() -> void:
 func _battle_on_player_changed() -> void:
 	# Gear/level changes should immediately affect combat.
 	_battle_recompute_player_combat()
+	_skills_sync_loadout()
 
-	# If we have no HP set yet, initialize.
-	if float(battle_runtime.get("player_hp_max", 0.0)) <= 0.0:
-		battle_runtime["player_hp_max"] = _p_hp_max
-		battle_runtime["player_hp"] = _p_hp_max
+	# Update max HP and clamp current HP
+	battle_runtime["player_hp_max"] = _p_hp_max
+	battle_runtime["player_hp"] = clamp(float(battle_runtime.get("player_hp")), 0.0, _p_hp_max)
 
 	battle_changed.emit()
 
@@ -371,6 +383,11 @@ func _battle_process(delta: float) -> void:
 	_agg_flush_accum += delta
 	if combat_log_compact_effective():
 		_combat_log_flush(false)
+		
+	# Regen tick (scaled by battle speed)
+	if _p_regen > 0.0 and float(battle_runtime.get("player_hp", 0.0)) > 0.0:
+		var nhp: float = float(battle_runtime["player_hp"]) + (_p_regen * dt)
+		battle_runtime["player_hp"] = clamp(nhp, 0.0, _p_hp_max)
 
 
 	_p_atk_accum += dt
@@ -402,7 +419,7 @@ func _battle_player_attack() -> void:
 	# Crit
 	if (RNG as RNGService).randf() < _p_crit:
 		was_crit = true
-		dmg *= 1.5
+		dmg *= _p_crit_mult
 
 	# Combo (percent points; allow >100)
 	var cc: float = max(0.0, _p_combo) / 100.0
@@ -415,7 +432,7 @@ func _battle_player_attack() -> void:
 
 	var total: float = dmg
 	if hits > 1:
-		total += float(hits - 1) * (dmg * 0.5) # extra hits at 50%
+		total += (dmg * _p_combo_extra_mult) # extra hits scale with combo dmg
 
 	var dealt: float = _apply_defense(total, _e_def)
 	battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
@@ -579,47 +596,30 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 	# _e_aps = is_boss ? 0.7 : 0.9
 
 func _battle_recompute_player_combat() -> void:
-	# Base values (tune later)
-	var base_hp: float = 100.0 + float(player.level) * 5.0
-	var base_atk: float = 10.0 + float(player.level) * 1.0
-	var base_def: float = 3.0 + float(player.level) * 0.25
-
-	var hp_add: float = 0.0
-	var atk_add: float = 0.0
-	var def_add: float = 0.0
-	var atk_spd: float = 0.0
-
-	var crit_pp: float = 0.0
-	var combo_pp: float = 0.0
-	var block_pp: float = 0.0
-	var avoid_pp: float = 0.0
-
-	for k in player.equipped.keys():
-		var it: GearItem = player.equipped.get(k, null)
-		if it == null or it.stats == null:
-			continue
-		var s: Stats = it.stats
-		hp_add += float(s.hp)
-		atk_add += float(s.atk)
-		def_add += float(s.def)
-		atk_spd += float(s.atk_spd)
-
-		crit_pp += float(s.crit_chance)
-		combo_pp += float(s.combo_chance)
-		block_pp += float(s.block)
-		avoid_pp += float(s.avoidance)
-
-	_p_hp_max = max(1.0, base_hp + hp_add)
-	_p_atk = max(1.0, base_atk + atk_add)
-	_p_def = max(0.0, base_def + def_add)
-
+	# Use the player's full stat pipeline (base class + class node + skills + gear + synergies).
+	_p_stats = player.total_stats()
+	
+	_p_hp_max = max(1.0, float(_p_stats.hp))
+	_p_atk = max(1.0, float(_p_stats.atk))
+	_p_def = max(0.0, float(_p_stats.def))
+	
 	# APS: base 1.0, plus atk_spd (treat as additive percent like 0.05 = +5%)
-	_p_aps = clamp(1.0 * (1.0 + atk_spd), 0.3, 10.0)
-
-	_p_crit = clamp(crit_pp / 100.0, 0.0, 0.75)
-	_p_combo = max(0.0, combo_pp)
-	_p_block = clamp(block_pp, 0.0, 75.0)
-	_p_avoid = clamp(avoid_pp, 0.0, 60.0)
+	_p_aps = clamp(1.0 * (1.0 + float(_p_stats.atk_spd)), 0.3, 10.0)
+	
+	_p_crit = clamp(float(_p_stats.crit_chance) / 100.0, 0.0, 0.75)
+	_p_combo = max(0.0, float(_p_stats.combo_chance))
+	_p_block = clamp(float(_p_stats.block), 0.0, 75.0)
+	_p_avoid = clamp(float(_p_stats.avoidance), 0.0, 60.0)
+	
+	_p_regen = max(0.0, float(_p_stats.regen))
+	
+	# Crit and combo damage are stored as percent points.
+	# Baselines: crit bonus +50%, combo extra hits deal 50%.
+	_p_crit_mult = 1.0 + 0.5 + (clamp(float(_p_stats.crit_dmg), 0.0, 500.0) / 100.0)
+	_p_combo_extra_mult = 0.5 + (clamp(float(_p_stats.combo_dmg), 0.0, 500.0) / 100.0)
+	
+	# INT reduces skill cooldowns (linear reduction, clamped).
+	_p_skill_cd_mult = _compute_skill_cd_mult(float(_p_stats.int_))
 
 func _battle_advance_progression() -> void:
 	var diff: String = String(battle_state.get("difficulty", "Easy"))
@@ -769,6 +769,116 @@ func _combat_log_flush(force: bool) -> void:
 		log_combat("reward", "reward", "[color=#CFCFCF]Rewards[/color]: +%d gold, +%d keys (%d waves)%s" % [g, k, w, boss_txt])
 
 		_agg_rewards = {"gold": 0, "keys": 0, "waves": 0, "boss_waves": 0}
+
+# ----------------- Skills (MVP) -----------------
+
+func _compute_skill_cd_mult(int_value: float) -> float:
+	# each 1 int reduces cooldown by 1% to a max reduction of 60%
+	return clamp(1.0 - (max(0.0, int_value) * 0.01), 0.40, 1.0)
+
+func _skills_sync_loadout() -> void:
+	if player == null:
+		return
+	player.ensure_class_and_skills_initialized()
+	
+	# Remove cooldown entries that no longer exist
+	var keep := {}
+	for sid in player.equipped_active_skills:
+		keep[String(sid)] = true
+		
+	for k in _skill_cd.keys():
+		if not keep.has(String(k)):
+			_skill_cd.erase(k)
+			
+	# Ensure cooldown entries exist for all equipped skills
+	for sid in player.equipped_active_skills:
+		var id: String = String(sid)
+		if not _skill_cd.has(id):
+			_skill_cd[id] = 0.0
+			
+func _battle_process_skills(dt: float) -> void:
+	if player == null:
+		return
+	if player.equipped_active_skills.is_empty():
+		return
+	if float(battle_runtime.get("enemy_hp", 0.0)) <= 0.0:
+		return
+		
+	# Tick cooldowns and cast ready skills.
+	# Safety cap to avoid huge multi-cast loops at high dt
+	var casts_left: int = 8
+	
+	for sid in player.equipped_active_skills:
+		if casts_left <= 0:
+			break
+		var id: String = String(sid)
+		var sd: SkillDef = SkillCatalog.get_def(id)
+		if sd == null or sd.type != SkillDef.SkillType.ACTIVE:
+			continue
+		
+		var cd_left: float = float(_skill_cd.get(id, 0.0)) - dt
+		_skill_cd[id] = cd_left
+		
+		if cd_left > 0.0:
+			continue
+			
+		# Cast now
+		_battle_cast_skill(sd)
+		
+		# Reset cooldown; if cd_left is negative, carry it forward so long dt doesn't lose time
+		var cd_reset: float = max(0.25, float(sd.base_cooldown) * _p_skill_cd_mult)
+		_skill_cd[id] = cd_reset + cd_left
+		casts_left -= 1
+		
+func _battle_cast_skill(sd: SkillDef) -> void:
+	if sd == null:
+		return
+		
+	var lvl: int = maxi(1, player.get_skill_level(sd.id))
+	
+	# Basic damage formula:
+	# damage = power(level) + scaling_stat * scaling_mult
+	var raw: float = float(sd.power(lvl))
+	raw+= _skill_get_stat_value(sd.scaling_stat) * float(sd.scaling_mult)
+	
+	if sd.target == SkillDef.Target.SELF:
+		# MVP treat SELF skills as heal. (You can add real effect types later)
+		var healed: float = raw
+		battle_runtime["player_hp"] = clamp(float(battle_runtime["player_hp"]) + healed, 0.0, _p_hp_max)
+		log_combat("player", "system", "[color=#7CFF7C]You[/color] cast [b]%s[/b] and healed [b]%d[/b]" % [sd.display_name, int(round(healed))])
+		return
+		
+	# Enemy-targeted skill
+	var was_crit: bool = false
+	var dmg: float = raw
+	if sd.can_crit and (RNG as RNGService).randf() < _p_crit:
+		was_crit = true
+		dmg *= _p_crit_mult
+		
+	var dealt: float = _apply_defense(dmg, _e_def)
+	battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
+	
+	var sev: String = "normal"
+	if was_crit:
+		sev = "crit"
+	
+	log_combat("player", sev, "[color=#7CFF7C]You[/color] cast [b]%s[/b] for [b]%d[/b]%s" % [
+		sd.display_name,
+		int(round(dealt)),
+		(" [color=#FFD24A](CRIT)[/color]" if was_crit else "")
+	])
+
+func _skill_get_stat_value(stat_name: String) -> float:
+	if _p_stats == null:
+		return 0.0
+	match stat_name:
+		"atk": return float(_p_stats.atk)
+		"str": return float(_p_stats.str)
+		"int": return float(_p_stats.int_)
+		"agi": return float(_p_stats.agi)
+		"def": return float(_p_stats.def)
+		"hp": return float(_p_stats.hp)
+	return 0.0
 
 func _fmt_duration_short(seconds: int) -> String:
 	seconds = maxi(0, seconds)

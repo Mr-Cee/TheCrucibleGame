@@ -42,7 +42,9 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 @export var premium_offline_unlocked: bool = false          # permanent bundle (+2h cap)
 @export var battlepass_expires_unix: int = 0                # temporary (+2h cap while active)
 
-
+@export var skill_levels: Dictionary = {}                   #skill_id -> int (>=1)
+@export var equipped_active_skills: Array[String] = []      #List of skill_ids(active)
+@export var equipped_passive_skills: Array[String] = []     #list of skill_ids(passive)
 
 # Crucible upgrade persistence
 var crucible_upgrade_paid_stages: int = 0
@@ -50,6 +52,8 @@ var crucible_upgrade_target_level: int = 0 # 0 means "not upgrading"
 var crucible_upgrade_finish_unix: int = 0  # unix seconds; 0 means "no timer running"
 
 
+func _init() -> void:
+	ensure_class_and_skills_initialized()
 
 func base_stats() -> Stats:
 	var s := Stats.new()
@@ -78,17 +82,27 @@ func base_stats() -> Stats:
 
 func total_stats() -> Stats:
 	var s := base_stats()
+	
+	#ensure fields exist for older saves / new players
+	ensure_class_and_skills_initialized()
+	
+	#Add class + passive skill flat bonuses
+	s.add(passive_stats_from_class_and_skills())
+	
+	#Gear
 	for slot in equipped.keys():
 		var item:GearItem = equipped[slot]
 		if item != null:
 			s.add(item.stats)
-	# Global stat synergies per your doc (e.g., STR increases HP for all). :contentReference[oaicite:4]{index=4}
-	# MVP conversion rates:
+			
+	#global stat synergies per document
+	#Conversion RatesL
 	s.hp += s.str * 5.0
 	s.atk += s.str * 0.5
-	s.atk += s.int_ * 0.6
+	s.atk += s.in * 0.6
 	s.atk += s.agi * 0.55
 	s.atk_spd += s.agi * 0.05
+	
 	return s
 
 func combat_power() -> int:
@@ -121,6 +135,10 @@ func to_dict() -> Dictionary:
 		"level": level,
 		"xp": xp,
 		"class_id": class_id,
+		"class_def_id": class_def_id,
+		"skill_levls": skill_levels,
+		"equipped_active_skills": equipped_active_skills,
+		"equipped_passive_skills": equipped_passive_skills,
 		"crucible_keys": crucible_keys,
 		"crucible_level": crucible_level,
 		"equipped": eq_out,
@@ -148,6 +166,26 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.level = int(d.get("level", 1))
 	p.xp = int(d.get("xp", 0))
 	p.class_id = int(d.get("class_id", 0))
+	p.class_def_id = int(d.get("class_def_id", ""))
+	
+	var slv: Variant = d.get("skill_levels", {})
+	p.skill_levels = {}
+	if typeof(slv) == TYPE_DICTIONARY:
+		p.skill_levels = slv as Dictionary
+		
+	var eas: Variant = d.get("equipped_active_skills", [])
+	p.equipped_active_skills = []
+	if typeof(eas) == TYPE_ARRAY:
+		for v in eas:
+			if v != null:
+				p.equipped_active_skills.append(String(v))	
+	var eps: Variant = d.get("equipped_passive_skills", [])
+	p.equipped_passive_skills = []
+	if typeof(eps) == TYPE_ARRAY:
+		for v in eps:
+			if v!= null:
+				p.equipped_passive_skills.append(String(v))
+				
 	p.crucible_keys = int(d.get("crucible_keys", 0))
 	p.crucible_level = int(d.get("crucible_level", 1))
 	p.crucible_batch = int(d.get("crucible_batch", 1))
@@ -185,7 +223,8 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 				p.equipped[slot] = null
 			elif typeof(iv) == TYPE_DICTIONARY:
 				p.equipped[slot] = GearItem.from_dict(iv as Dictionary)
-
+				
+	p.ensure_class_and_skills_initialized()
 	return p
 
 func xp_required_for_next_level() -> int:
@@ -212,3 +251,72 @@ func add_xp(amount: int) -> int:
 
 func battlepass_active(now_unix: int) -> bool:
 	return battlepass_expires_unix > now_unix
+
+func ensure_class_and_skills_initialized() -> void:
+	#call this after loading or creating a new player
+	if class_def_id == "":
+		var base_def: ClassDef = ClassCatalog.base_def_for_class_id(class_id)
+		if base_def != null:
+			class_def_id = base_def.id
+			
+	#seed starter skills if missing (new save or older save)
+	if skill_levels.is_empty():
+		skill_levels = SkillsCatalog.starting_active_loadout_for_class(class_id)
+		
+	if equipped_active_skills.is_empty():
+		equipped_active_skills = SkillCatalog.starting_active_loadout_for_class(class_id)
+		
+	if equipped_passive_skills.is_empty():
+		equipped_passive_skills = SkillCatalog.starting_passives_for_class(class_id)
+		
+func get_skill_level(skill_id: String) -> int:
+	if skill_id == "":
+		return 0
+	return int(skill_levels.get(skill_id, 0))
+
+func set_skill_level(skill_id: String, lvl: int) -> void:
+	if skill_id == "":
+		return
+	lvl = maxi(0, lvl)
+	if lvl <= 0:
+		skill_levels.erase(skill_id)
+	else:
+		skill_levels[skill_id] = lvl
+		
+func _unique_skill_ids(ids: Array[String]) -> void:
+	var seen := {}
+	var out: Array[String] = []
+	for id in ids:
+		if id == "" or seen.has(id):
+			continue
+		seen[id] = true
+		out.append(id)
+	return out
+	
+func passive_statts_from_class_and_skills() -> Stats:
+	#Flat passive from the select class node + passice skills (equipped + granted)
+	var out := Stats.new()
+	
+	#Class passice flat
+	var cd: ClassDef = ClassCatalog.get_def(class_def_id)
+	if cd != null and cd.passive_flat != null:
+		out.add(cd.passive_flat)
+		
+	#Class-granted passive skills + equipped passive skills
+	var passives: Array[String] = []
+	if cd != null and cd.granted_passive_skills.size() > 0:
+		passives.append_array(cd.granted_passive_skills)
+	passives.append_array(equipped_passive_skills)
+	
+	for sid in _unique_skill_ids(passives):
+		var sd: SkillDef = SkillCatalog.get_def(sid)
+		if sd == null:
+			continue
+		if sd.type != SkillDef.SkillType.PASSIVE:
+			continue
+		if sd.passive_flat == null:
+			continue
+		var lvl: int = maxi(1, get_skill_level(sid))
+		out.add(sd.passive_flat.scaled(float(lvl)))
+		
+	return out
