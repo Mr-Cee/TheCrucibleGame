@@ -12,7 +12,6 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 
 @export var time_vouchers: int = 0
 
-
 @export var crucible_keys: int = 10
 @export var crucible_level: int = 1
 
@@ -33,10 +32,17 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 
 @export var deferred_gear: Array[Dictionary] = []
 
-
 @export var crucible_batch: int = 1
 @export var crucible_rarity_min: int = Catalog.Rarity.COMMON
 @export var crucible_auto_sell_below: bool = true
+
+@export var last_active_unix: int = 0
+
+# ============== Unlocks ==================
+@export var premium_offline_unlocked: bool = false          # permanent bundle (+2h cap)
+@export var battlepass_expires_unix: int = 0                # temporary (+2h cap while active)
+
+
 
 # Crucible upgrade persistence
 var crucible_upgrade_paid_stages: int = 0
@@ -125,6 +131,12 @@ func to_dict() -> Dictionary:
 		"crucible_upgrade_paid_stages": crucible_upgrade_paid_stages,
 		"crucible_upgrade_target_level": crucible_upgrade_target_level,
 		"crucible_upgrade_finish_unix": crucible_upgrade_finish_unix,
+		"last_active_unix": last_active_unix,
+		#Unlocks
+		"premium_offline_unlocked": premium_offline_unlocked,
+		"battlepass_expires_unix": battlepass_expires_unix,
+
+
 	}
 
 static func from_dict(d: Dictionary) -> PlayerModel:
@@ -144,6 +156,11 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.crucible_upgrade_paid_stages = int(d.get("crucible_upgrade_paid_stages", 0))
 	p.crucible_upgrade_target_level = int(d.get("crucible_upgrade_target_level", 0))
 	p.crucible_upgrade_finish_unix = int(d.get("crucible_upgrade_finish_unix", 0))
+	p.last_active_unix = int(d.get("last_active_unix", 0))
+	
+	p.premium_offline_unlocked = bool(d.get("premium_offline_unlocked", false))
+	p.battlepass_expires_unix = int(d.get("battlepass_expires_unix", 0))
+
 
 	var dg: Variant = d.get("deferred_gear", [])
 	p.deferred_gear = []
@@ -192,3 +209,6 @@ func add_xp(amount: int) -> int:
 		levels_gained += 1
 
 	return levels_gained
+
+func battlepass_active(now_unix: int) -> bool:
+	return battlepass_expires_unix > now_unix

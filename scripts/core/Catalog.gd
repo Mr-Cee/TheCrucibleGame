@@ -486,3 +486,83 @@ static func battle_advance_progression(diff: String, level: int, stage: int, wav
 		"stage": stage,
 		"wave": wave,
 	}
+
+# --- Offline rewards tuning ---
+const OFFLINE_BASE_CAP_SECONDS: int = 8 * 60 * 60
+const OFFLINE_BATTLEPASS_BONUS_SECONDS: int = 2 * 60 * 60
+const OFFLINE_PREMIUM_BONUS_SECONDS: int = 2 * 60 * 60
+
+const OFFLINE_MAX_SECONDS: int = 8 * 60 * 60  # cap offline at 8 hours
+const OFFLINE_KEYS_MULT: float = 0.30  # 30% of normal key rate while offline
+
+# Estimated time to clear ONE wave offline (seconds).
+# This is an MVP heuristic and is intentionally tunable.
+const OFFLINE_WAVE_SECONDS_BASE: float = 10.0
+const OFFLINE_WAVE_SECONDS_PER_DIFFICULTY: float = 1.25
+const OFFLINE_WAVE_SECONDS_PER_LEVEL: float = 0.40
+
+static func offline_xp_for_wave(player_level: int, diff: String, level: int, stage: int, wave: int, is_boss: bool) -> int:
+	# Keep offline XP modest since Crucible draws are your primary XP source.
+	var di: int = battle_difficulty_index(diff)
+	var base: float = 1.0
+	base += 0.25 * float(di)
+	base += 0.10 * float(max(0, level - 1))
+	base += 0.05 * float(max(0, stage - 1))
+	if is_boss:
+		base *= 1.5
+	return int(round(base))
+
+static func offline_estimated_wave_seconds(diff: String, level: int) -> float:
+	level = max(1, level)
+	var di: int = battle_difficulty_index(diff)
+
+	var t: float = OFFLINE_WAVE_SECONDS_BASE
+	t += OFFLINE_WAVE_SECONDS_PER_DIFFICULTY * float(di)
+	t += OFFLINE_WAVE_SECONDS_PER_LEVEL * float(level - 1)
+
+	# never faster than 3.5s per “virtual wave”
+	return max(3.5, t)
+
+static func offline_simulate_rewards(player_level: int, diff: String, level: int, seconds: int) -> Dictionary:
+	# True simulation:
+	# - NO battle progression changes
+	# - stage/wave ignored
+	seconds = maxi(0, seconds)
+	level = maxi(1, level)
+
+	var wave_sec: float = offline_estimated_wave_seconds(diff, level)
+	var waves: int = int(floor(float(seconds) / wave_sec))
+	if waves <= 0:
+		return {"gold": 0, "keys": 0, "xp": 0}
+
+	# Use your existing per-wave reward formulas, but fix stage=1 wave=1 and is_boss=false
+	# so stage/wave do not matter.
+	var gold_per_wave: int = battle_gold_for_wave(diff, level, 1, 1, false)
+	var keys_per_wave: int = battle_keys_for_wave(diff, level, 1, 1, false)
+
+	# Keys are reduced offline
+	var keys_f: float = float(keys_per_wave) * float(waves) * OFFLINE_KEYS_MULT
+
+	# Keep offline XP modest; scale with difficulty + level slightly
+	# (You can tune this independently if needed.)
+	var di: int = battle_difficulty_index(diff)
+	var xp_per_wave: float = 1.0 + 0.25 * float(di) + 0.10 * float(level - 1)
+	var xp_total: int = int(round(xp_per_wave * float(waves)))
+
+	return {
+		"gold": gold_per_wave * waves,
+		"keys": int(floor(keys_f)),
+		"xp": xp_total,
+		"waves": waves,  # optional debug info
+	}
+
+static func offline_cap_seconds_for_player(p: PlayerModel, now_unix: int) -> int:
+	var cap: int = OFFLINE_BASE_CAP_SECONDS
+
+	if p != null:
+		if bool(p.premium_offline_unlocked):
+			cap += OFFLINE_PREMIUM_BONUS_SECONDS
+		if int(p.battlepass_expires_unix) > now_unix:
+			cap += OFFLINE_BATTLEPASS_BONUS_SECONDS
+
+	return cap

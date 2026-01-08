@@ -769,3 +769,76 @@ func _combat_log_flush(force: bool) -> void:
 		log_combat("reward", "reward", "[color=#CFCFCF]Rewards[/color]: +%d gold, +%d keys (%d waves)%s" % [g, k, w, boss_txt])
 
 		_agg_rewards = {"gold": 0, "keys": 0, "waves": 0, "boss_waves": 0}
+
+func _fmt_duration_short(seconds: int) -> String:
+	seconds = maxi(0, seconds)
+	var m: int = seconds / 60
+	var s: int = seconds % 60
+	var h: int = m / 60
+	m = m % 60
+	if h > 0:
+		return "%dh %dm" % [h, m]
+	if m > 0:
+		return "%dm %ds" % [m, s]
+	return "%ds" % s
+
+func apply_offline_rewards_on_load() -> Dictionary:
+	if player == null:
+		return {"applied": false}
+
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	var last_unix: int = int(player.last_active_unix)
+
+	if last_unix <= 0:
+		player.last_active_unix = now_unix
+		return {"applied": false}
+
+	var dt: int = now_unix - last_unix
+	if dt <= 0:
+		player.last_active_unix = now_unix
+		return {"applied": false}
+
+	# Dynamic cap based on entitlements
+	var cap: int = Catalog.offline_cap_seconds_for_player(player, now_unix)
+	var capped: int = mini(dt, cap)
+
+	if capped < 30:
+		player.last_active_unix = now_unix
+		return {"applied": false}
+
+	# IMPORTANT: offline rewards depend only on difficulty + level
+	var diff: String = String(battle_state.get("difficulty", "Easy"))
+	var lvl: int = int(battle_state.get("level", 1))
+
+	var sim: Dictionary = Catalog.offline_simulate_rewards(player.level, diff, lvl, capped)
+
+	var gold_gain: int = int(sim.get("gold", 0))
+	var key_gain: int = int(sim.get("keys", 0))
+	var xp_gain: int = int(sim.get("xp", 0))
+
+	if gold_gain != 0:
+		player.gold += gold_gain
+	if key_gain != 0:
+		player.crucible_keys += key_gain
+
+	var levels: int = 0
+	if xp_gain > 0:
+		levels = player.add_xp(xp_gain)
+
+	# DO NOT modify battle_state at all (true simulation)
+	player.last_active_unix = now_unix
+
+	inventory_event.emit(
+		"Offline (%s): +%d gold, +%d keys, +%d XP" % [_fmt_duration_short(capped), gold_gain, key_gain, xp_gain]
+	)
+	if levels > 0:
+		inventory_event.emit("Level Up! Lv.%d" % player.level)
+
+	return {
+		"applied": (gold_gain != 0 or key_gain != 0 or xp_gain != 0),
+		"seconds": capped,
+		"gold": gold_gain,
+		"keys": key_gain,
+		"xp": xp_gain,
+		"levels": levels,
+	}

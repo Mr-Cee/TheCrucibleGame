@@ -38,6 +38,11 @@ func request_save() -> void:
 func save_now() -> void:
 	_ensure_timer()
 	_save_pending = false
+	
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	if Game.player != null:
+		Game.player.last_active_unix = now_unix
+
 
 	if Game.player == null:
 		_log("save_now: Game.player is null; skipping.")
@@ -97,15 +102,23 @@ func load_or_new() -> void:
 		return
 
 	var p_dict: Dictionary = pvar
+	
 	Game.player = PlayerModel.from_dict(p_dict)
-	Game.player_changed.emit()
+
 	var bvar: Variant = root.get("battle", null)
 	if bvar != null and typeof(bvar) == TYPE_DICTIONARY:
 		Game.set_battle_state(bvar as Dictionary)
 	else:
 		Game.reset_battle_state()
 
-	
+	# Apply offline rewards BEFORE announcing player_changed (so UI shows the updated values)
+	var summary: Dictionary = Game.apply_offline_rewards_on_load()
+	Game.player_changed.emit()
+
+	# Persist immediately so offline rewards can't be re-applied on next launch
+	if bool(summary.get("applied", false)):
+		save_now()
+
 	_log("Loaded save OK.")
 
 func _new_game() -> void:

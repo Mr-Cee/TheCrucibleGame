@@ -382,7 +382,6 @@ func _refresh_hud_nonbattle() -> void:
 
 	crucible_panel.call("set_crucible_hud", p.crucible_keys, p.crucible_level, int(p.crucible_batch), pending)
 
-
 func _on_crucible_draw_pressed() -> void:
 	# Manual draw stops auto
 	_stop_auto_draw()

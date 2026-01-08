@@ -11,6 +11,13 @@ extends Window
 @onready var set_battle_button: Button = $VBox/BattleRow/SetBattleButton
 @onready var battle_preview: Label = $VBox/BattlePreview
 
+var _offline_row: HBoxContainer
+var _offline_hours: SpinBox
+var _offline_mins: SpinBox
+var _offline_apply: Button
+var _offline_hint: Label
+
+
 @onready var close_button: Button = $VBox/CloseButton
 
 # Keep these as IDs so we can map them cleanly.
@@ -21,6 +28,8 @@ const GIVE_ITEMS: Array[Dictionary] = [
 	{"id":"diamonds", "label":"Diamonds"},
 	{"id":"crystals", "label":"Crystals"},
 	{"id":"crucible_keys", "label":"Crucible Keys"},
+	{"id":"battlepass_30d", "label":"Battle Pass (30d offline cap +2h)"},
+	{"id":"premium_offline", "label":"Premium Offline Bundle (2h Permanent)"}
 ]
 
 func _ready() -> void:
@@ -45,6 +54,7 @@ func _ready() -> void:
 	diff_select.item_selected.connect(func(_i: int) -> void: _refresh_battle_preview())
 
 	_refresh_from_game()
+	_build_offline_controls()
 
 func popup_and_refresh() -> void:
 	_refresh_from_game()
@@ -132,13 +142,21 @@ func _on_give_pressed() -> void:
 			Game.player.crystals += amt
 		"crucible_keys":
 			Game.player.crucible_keys += amt
+		"battlepass_30d":
+			var now_unix: int = int(Time.get_unix_time_from_system())
+			var days: int = 30
+			Game.player.battlepass_expires_unix = now_unix + days * 24 * 60 * 60
+			Game.inventory_event.emit("Dev: Battle Pass active for 30 days.")
+		"premium_offline":
+			Game.player.premium_offline_unlocked = true
+			Game.inventory_event.emit("Dev: Premium Offline Bundle unlocked.")
+
 		_:
 			Game.inventory_event.emit("Dev: unknown give id '%s'" % id)
 			return
 
 	Game.player_changed.emit()
 	Game.inventory_event.emit("Dev: +%d %s" % [amt, id])
-
 
 func _refresh_battle_preview() -> void:
 	var diff: String = diff_select.get_item_text(diff_select.selected)
@@ -172,3 +190,107 @@ func _on_set_battle_pressed() -> void:
 		})
 
 	Game.inventory_event.emit("Dev: set battle to %s %d-%d W%d" % [diff, lvl, stg, wav])
+
+func _build_offline_controls() -> void:
+	# Build UI dynamically so you don't need to edit the DevPopup scene.
+	var vbox := $VBox as VBoxContainer
+	if vbox == null:
+		return
+
+	# Avoid building twice (hot reload, etc.)
+	if vbox.get_node_or_null("OfflineRow") != null:
+		return
+
+	_offline_row = HBoxContainer.new()
+	_offline_row.name = "OfflineRow"
+	_offline_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var title := Label.new()
+	title.text = "Offline:"
+	_offline_row.add_child(title)
+
+	_offline_hours = SpinBox.new()
+	_offline_hours.min_value = 0
+	_offline_hours.max_value = 24
+	_offline_hours.step = 1
+	_offline_hours.value = 8
+	_offline_hours.custom_minimum_size = Vector2(70, 0)
+	_offline_row.add_child(_offline_hours)
+
+	var h_lbl := Label.new()
+	h_lbl.text = "h"
+	_offline_row.add_child(h_lbl)
+
+	_offline_mins = SpinBox.new()
+	_offline_mins.min_value = 0
+	_offline_mins.max_value = 59
+	_offline_mins.step = 1
+	_offline_mins.value = 0
+	_offline_mins.custom_minimum_size = Vector2(70, 0)
+	_offline_row.add_child(_offline_mins)
+
+	var m_lbl := Label.new()
+	m_lbl.text = "m"
+	_offline_row.add_child(m_lbl)
+
+	_offline_apply = Button.new()
+	_offline_apply.text = "Apply"
+	_offline_apply.pressed.connect(_on_apply_offline_pressed)
+	_offline_row.add_child(_offline_apply)
+
+	_offline_hint = Label.new()
+	_offline_hint.text = ""
+	_offline_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_offline_row.add_child(_offline_hint)
+
+	# Insert it just above CloseButton for a clean layout
+	var close_idx := vbox.get_children().find(close_button)
+	if close_idx >= 0:
+		vbox.add_child(_offline_row)
+		vbox.move_child(_offline_row, close_idx)
+	else:
+		vbox.add_child(_offline_row)
+
+	# Live preview hint
+	_offline_hours.value_changed.connect(func(_v: float) -> void: _update_offline_hint())
+	_offline_mins.value_changed.connect(func(_v: float) -> void: _update_offline_hint())
+	_update_offline_hint()
+
+func _update_offline_hint() -> void:
+	if _offline_hint == null:
+		return
+	var secs: int = int(_offline_hours.value) * 3600 + int(_offline_mins.value) * 60
+	var cap: int = int(Catalog.OFFLINE_MAX_SECONDS)
+	if secs > cap:
+		_offline_hint.text = "Capped at %dh %dm" % [cap / 3600, (cap % 3600) / 60]
+	else:
+		_offline_hint.text = ""
+
+func _on_apply_offline_pressed() -> void:
+	if Game.player == null:
+		Game.inventory_event.emit("Dev: no player.")
+		return
+
+	var secs: int = int(_offline_hours.value) * 3600 + int(_offline_mins.value) * 60
+	if secs <= 0:
+		Game.inventory_event.emit("Dev: offline time must be > 0.")
+		return
+
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	Game.player.last_active_unix = now_unix - secs
+
+	# Apply rewards immediately
+	var summary: Dictionary = Game.apply_offline_rewards_on_load()
+
+	# Refresh UI immediately
+	Game.player_changed.emit()
+	_refresh_from_game()
+
+	# Save if available (safe)
+	if Game.has_method("request_save"):
+		Game.call("request_save")
+
+	if bool(summary.get("applied", false)):
+		Game.inventory_event.emit("Dev: applied offline rewards.")
+	else:
+		Game.inventory_event.emit("Dev: no offline rewards applied (too small / capped / none).")
