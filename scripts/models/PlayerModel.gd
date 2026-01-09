@@ -3,6 +3,7 @@ class_name PlayerModel
 
 enum ClassId { WARRIOR, MAGE, ARCHER }
 
+@export var character_name: String = ""
 @export var class_id: int = ClassId.WARRIOR
 @export var level: int = 1
 @export var xp: int = 0
@@ -128,6 +129,7 @@ func to_dict() -> Dictionary:
 		eq_out[str(slot_id)] = item.to_dict() if item != null else null
 
 	return {
+		"character_name": character_name,
 		"gold": gold,
 		"diamonds": diamonds,
 		"crystals": crystals,
@@ -159,6 +161,7 @@ func to_dict() -> Dictionary:
 
 static func from_dict(d: Dictionary) -> PlayerModel:
 	var p := PlayerModel.new()
+	p.character_name = String(d.get("character_name", ""))
 	p.gold = int(d.get("gold", 0))
 	p.diamonds = int(d.get("diamonds", 0))
 	p.crystals = int(d.get("crystals", 0))
@@ -225,6 +228,8 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 				p.equipped[slot] = GearItem.from_dict(iv as Dictionary)
 				
 	p.ensure_class_and_skills_initialized()
+	# Ensure name exists for older saves / new games.
+	p.ensure_name_initialized()
 	return p
 
 func xp_required_for_next_level() -> int:
@@ -322,3 +327,41 @@ func passive_stats_from_class_and_skills() -> Stats:
 		out.add(sd.passive_flat.scaled(float(lvl)))
 		
 	return out
+
+# ----------------- Character Name -----------------
+func ensure_name_initialized() -> void:
+	if character_name.strip_edges() != "":
+		return
+	character_name = generate_random_adventurer_name()
+	
+static func generate_random_adventurer_name() -> String:
+	# "Adventurer XXXXXXXXXX" where X is a digit
+	# Note: True uniqueness on name server/world is requires backend validation
+	# This local generator is collision-resistant for a single-player save
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	
+	# Use time_ random to reduce collision risk; keep exactly 10 digits
+	var t: int = int(Time.get_unix_time_from_system()) # seconds
+	var n: int = int(((t * 100000) + (rng.randi() % 100000)) % 10000000000)
+	var digits := "%010d" % n
+	return "Adventurer " + digits
+	
+func base_class_display_name() -> String:
+	match int(class_id):
+		ClassId.WARRIOR: return "Warrior"
+		ClassId.MAGE: return "Mage"
+		ClassId.ARCHER: return "Archer"
+	return "Unknown"
+	
+func current_class_name_display() -> String:
+	# If you have advanced classes enabled (class_def_id + ClassCatalog), show the advanced name
+	# Otherwise fall back to base class name
+	# (If your project already has class_def_id, this will work as is)
+	if "class_def_id" in self:
+		var cid: String = String(get("class_def_id"))
+		if cid != "":
+			var cd: ClassDef = ClassCatalog.get_def(cid)
+			if cd != null:
+				return cd.display_name
+	return base_class_display_name()

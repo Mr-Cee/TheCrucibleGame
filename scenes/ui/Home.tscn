@@ -58,9 +58,16 @@ size_flags_horizontal = 3
 [node name="CharacterVBox" type="VBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+[node name="HeaderRow" type="HBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+layout_mode = 2
+
+[node name="NameButton" type="Button" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow"]
 layout_mode = 2
 text = "CharacterName"
+
+[node name="ClassLevelLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow"]
+layout_mode = 2
+text = "Class Label + level"
 
 [node name="HPBar" type="ProgressBar" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
 layout_mode = 2

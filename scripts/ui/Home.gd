@@ -6,6 +6,9 @@ extends Control
 @onready var xp_bar: ProgressBar = $RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/XPBar
 @onready var cp_label: Label = $RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/CPLabel
 
+@onready var name_button: Button = $RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow/NameButton
+@onready var class_level_label: Label = $RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow/ClassLevelLabel
+
 @onready var gold_label: Label = $RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox/GoldLabel
 @onready var diamonds_label: Label = $RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox/DiamondsLabel
 @onready var crystals_label: Label = $RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox/CrystalsLabel
@@ -112,7 +115,12 @@ var _class_confirm_btn: Button = null
 var _class_hint_lbl: Label = null
 var _class_cards: Dictionary = {} # class_id -> PanelContainer
 
+const RENAME_COST_CRYSTALS := 1000
 
+var _rename_overlay: Control = null
+var _rename_line: LineEdit = null
+var _rename_status: Label = null
+var _rename_confirm: Button = null
 
 #-------------------------------------------------------------------------
 
@@ -174,6 +182,10 @@ func _ready() -> void:
 	# ... plus your existing HUD refresh hookup ...
 	Game.player_changed.connect(_refresh_hud_nonbattle)
 	_refresh_hud_nonbattle()
+	
+	Game.player_changed.connect(_refresh_character_header)
+	_refresh_character_header()
+	name_button.pressed.connect(_open_rename_popup)
 	
 	# Force class selection before battle begins (new games only).
 	call_deferred("_maybe_prompt_class_selection")
@@ -1289,7 +1301,6 @@ func _refresh_advanced_card_styles() -> void:
 		st.border_color = accent
 		card.add_theme_stylebox_override("panel", st)
 
-
 func _choose_advanced_class() -> void:
 	if Game.player == null:
 		return
@@ -1308,7 +1319,6 @@ func _choose_advanced_class() -> void:
 
 	# If they skipped milestones, immediately prompt for the next required tier.
 	call_deferred("_maybe_prompt_advanced_class_selection")
-
 
 func _next_advancement_text(cd: ClassDef) -> String:
 	# Find earliest child unlock level (usually 50 or 75). If none, final tier.
@@ -1364,3 +1374,131 @@ func _accent_for_base_class(base_class_id: int, variant_index: int) -> Color:
 		PlayerModel.ClassId.ARCHER:
 			return Color(0.30, 1.00, 0.55 + 0.06 * variant_index, 1.0)
 	return Color(0.9, 0.9, 0.9, 1.0)
+
+func _refresh_character_header() -> void:
+	if Game.player == null:
+		return
+
+	# Ensure random name exists (older saves/new games)
+	Game.player.ensure_name_initialized()
+
+	name_button.text = Game.player.character_name
+	class_level_label.text = "%s  Lv %d" % [Game.player.current_class_name_display(), int(Game.player.level)]
+
+func _open_rename_popup() -> void:
+	if _rename_overlay != null:
+		return
+	if Game.player == null:
+		return
+
+	_rename_overlay = Control.new()
+	_rename_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_rename_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_rename_overlay)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_rename_overlay.add_child(dim)
+
+	var shell := PanelContainer.new()
+	shell.anchor_left = 0.5
+	shell.anchor_right = 0.5
+	shell.anchor_top = 0.5
+	shell.anchor_bottom = 0.5
+	shell.offset_left = -260
+	shell.offset_right = 260
+	shell.offset_top = -140
+	shell.offset_bottom = 140
+	shell.mouse_filter = Control.MOUSE_FILTER_STOP
+	_rename_overlay.add_child(shell)
+
+	var root := VBoxContainer.new()
+	root.offset_left = 16
+	root.offset_right = -16
+	root.offset_top = 14
+	root.offset_bottom = -14
+	shell.add_child(root)
+
+	var title := Label.new()
+	title.text = "Change Character Name"
+	title.add_theme_font_size_override("font_size", 18)
+	root.add_child(title)
+
+	var info := Label.new()
+	info.text = "Cost: %d crystals" % RENAME_COST_CRYSTALS
+	root.add_child(info)
+
+	_rename_line = LineEdit.new()
+	_rename_line.placeholder_text = "Enter new name"
+	_rename_line.text = Game.player.character_name
+	root.add_child(_rename_line)
+
+	_rename_status = Label.new()
+	_rename_status.text = ""
+	_rename_status.modulate = Color(1, 0.7, 0.7, 1)
+	root.add_child(_rename_status)
+
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 10)
+	root.add_child(buttons)
+
+	var cancel := Button.new()
+	cancel.text = "Cancel"
+	cancel.pressed.connect(_close_rename_popup)
+	buttons.add_child(cancel)
+
+	_rename_confirm = Button.new()
+	_rename_confirm.text = "Confirm"
+	buttons.add_child(_rename_confirm)
+
+	# Wire validation and confirm
+	_rename_line.text_changed.connect(func(_t: String) -> void:
+		_rename_validate()
+	)
+	_rename_validate()
+
+	_rename_confirm.pressed.connect(func() -> void:
+		_rename_validate()
+		if _rename_confirm.disabled:
+			return
+
+		var proposed := _rename_line.text.strip_edges()
+		Game.player.crystals -= RENAME_COST_CRYSTALS
+		Game.player.character_name = proposed
+
+		SaveManager.save_now()
+		Game.player_changed.emit()
+		_close_rename_popup()
+	)
+
+func _close_rename_popup() -> void:
+	if _rename_overlay != null:
+		_rename_overlay.queue_free()
+		_rename_overlay = null
+
+func _rename_validate() -> void:
+	if Game.player == null or _rename_line == null or _rename_status == null or _rename_confirm == null:
+		return
+
+	var proposed := _rename_line.text.strip_edges()
+
+	if proposed.length() < 3:
+		_rename_status.text = "Name must be at least 3 characters."
+		_rename_confirm.disabled = true
+		return
+
+	if proposed.length() > 24:
+		_rename_status.text = "Name must be 24 characters or less."
+		_rename_confirm.disabled = true
+		return
+
+	if Game.player.crystals < RENAME_COST_CRYSTALS:
+		_rename_status.text = "Not enough crystals."
+		_rename_confirm.disabled = true
+		return
+
+	# Placeholder for server uniqueness validation/reservation goes here.
+	_rename_status.text = ""
+	_rename_confirm.disabled = false
