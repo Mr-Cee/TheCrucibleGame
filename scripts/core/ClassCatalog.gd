@@ -125,3 +125,12 @@ static func next_choices(current_class_def_id: String, player_level: int) -> Arr
 		return a.display_name < b.display_name
 	)
 	return out
+
+static func children_of(parent_id: String) -> Array[ClassDef]:
+	_ensure_built()
+	var out: Array[ClassDef] = []
+	for d in _defs.values():
+		var cd: ClassDef = d
+		if cd.parent_id == parent_id:
+			out.append(cd)
+	return out

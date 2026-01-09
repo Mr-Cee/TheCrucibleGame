@@ -103,8 +103,21 @@ func _ready() -> void:
 func class_selection_needed() -> bool:
 	if player == null:
 		return true
-	var cid: int = int(player.class_id)
-	return cid < 0
+	if int(player.class_id) < 0:
+		return true
+
+	# Advanced class pending?
+	var cid := ""
+	if player.has_method("ensure_class_and_skills_initialized"):
+		player.ensure_class_and_skills_initialized()
+	cid = String(player.get("class_def_id"))
+	if cid != "":
+		var pending: Array[ClassDef] = ClassCatalog.next_choices(cid, int(player.level))
+		if not pending.is_empty():
+			return true
+
+	return false
+
 
 func _process(delta: float) -> void:
 	_upgrade_check_accum += delta

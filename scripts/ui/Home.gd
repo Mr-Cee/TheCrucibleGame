@@ -177,6 +177,11 @@ func _ready() -> void:
 	
 	# Force class selection before battle begins (new games only).
 	call_deferred("_maybe_prompt_class_selection")
+	
+	call_deferred("_maybe_prompt_advanced_class_selection")
+	Game.player_changed.connect(func() -> void:
+		call_deferred("_maybe_prompt_advanced_class_selection")
+	)
 
 func _process(delta: float) -> void:
 	_hud_ui_accum += delta
@@ -1031,6 +1036,100 @@ func _make_class_card(class_id: int, name: String, blurb: String, advances: Stri
 
 	return card
 
+func _show_advanced_class_popup(current_name: String, required_level: int, choices: Array[ClassDef]) -> void:
+	_class_selected_id = -1
+	_class_cards.clear()
+
+	# Full-screen modal overlay
+	_class_select_overlay = Control.new()
+	_class_select_overlay.name = "AdvancedClassSelectOverlay"
+	_class_select_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_class_select_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_class_select_overlay.focus_mode = Control.FOCUS_ALL
+	add_child(_class_select_overlay)
+	_class_select_overlay.grab_focus()
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.80)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_class_select_overlay.add_child(dim)
+
+	var shell := PanelContainer.new()
+	shell.anchor_left = 0.5
+	shell.anchor_right = 0.5
+	shell.anchor_top = 0.5
+	shell.anchor_bottom = 0.5
+	shell.offset_left = -520
+	shell.offset_right = 520
+	shell.offset_top = -310
+	shell.offset_bottom = 310
+	shell.mouse_filter = Control.MOUSE_FILTER_STOP
+	_class_select_overlay.add_child(shell)
+
+	var shell_style := StyleBoxFlat.new()
+	shell_style.bg_color = Color(0.10, 0.10, 0.10, 0.98)
+	shell_style.corner_radius_top_left = 10
+	shell_style.corner_radius_top_right = 10
+	shell_style.corner_radius_bottom_left = 10
+	shell_style.corner_radius_bottom_right = 10
+	shell_style.set_border_width_all(1)
+	shell_style.border_color = Color(0.20, 0.20, 0.20, 1.0)
+	shell.add_theme_stylebox_override("panel", shell_style)
+
+	var root := VBoxContainer.new()
+	root.offset_left = 18
+	root.offset_right = -18
+	root.offset_top = 14
+	root.offset_bottom = -14
+	shell.add_child(root)
+
+	var title := Label.new()
+	title.text = "Choose Your Advanced Class (Lv %d)" % required_level
+	title.add_theme_font_size_override("font_size", 22)
+	root.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "Current: %s" % current_name
+	subtitle.modulate = Color(0.85, 0.85, 0.85, 1.0)
+	root.add_child(subtitle)
+
+	root.add_child(HSeparator.new())
+
+	var cards_row := HBoxContainer.new()
+	cards_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cards_row.add_theme_constant_override("separation", 14)
+	root.add_child(cards_row)
+
+	# Build one card per available choice
+	for i in range(choices.size()):
+		var cd: ClassDef = choices[i]
+		var accent := _accent_for_base_class(cd.base_class_id, i)
+		var card := _make_advanced_class_card(cd, accent)
+		cards_row.add_child(card)
+		_class_cards[cd.id] = card
+
+	root.add_child(HSeparator.new())
+
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 12)
+	root.add_child(footer)
+
+	_class_hint_lbl = Label.new()
+	_class_hint_lbl.text = "Select a class, then confirm."
+	_class_hint_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(_class_hint_lbl)
+
+	_class_confirm_btn = Button.new()
+	_class_confirm_btn.text = "Confirm"
+	_class_confirm_btn.disabled = true
+	_class_confirm_btn.pressed.connect(func() -> void:
+		_choose_advanced_class()
+	)
+	footer.add_child(_class_confirm_btn)
+
+	_refresh_advanced_card_styles()
+
 func _refresh_class_card_styles() -> void:
 	for cid in _class_cards.keys():
 		var card: PanelContainer = _class_cards[cid]
@@ -1062,3 +1161,206 @@ func _advances_at_25_text(base_class_id: int) -> String:
 		names.append(c.display_name)
 
 	return "Advances at Lv 25: " + " or ".join(names)
+
+func _maybe_prompt_advanced_class_selection() -> void:
+	# Don’t interrupt an existing class popup
+	if _class_select_overlay != null:
+		return
+	if Game.player == null:
+		return
+
+	# Starting class selection still takes priority
+	if int(Game.player.class_id) < 0:
+		return
+
+	# Ensure class_def_id exists/valid
+	if Game.player.has_method("ensure_class_and_skills_initialized"):
+		Game.player.ensure_class_and_skills_initialized()
+
+	var current_id := String(Game.player.class_def_id)
+	if current_id == "":
+		return
+
+	var choices: Array[ClassDef] = ClassCatalog.next_choices(current_id, int(Game.player.level))
+	if choices.is_empty():
+		return
+
+	# We have a pending advancement choice.
+	var required_level := 999999
+	for c in choices:
+		required_level = mini(required_level, int(c.unlock_level))
+
+	var current_def: ClassDef = ClassCatalog.get_def(current_id)
+	var current_name := current_def.display_name if current_def != null else "Class"
+
+	_show_advanced_class_popup(current_name, required_level, choices)
+
+# Small blurb mapping (extend as you like; fallback is fine)
+const CLASS_BLURBS := {
+	"knight": "Armored defender focused on durability.",
+	"berserker": "Relentless brawler who thrives on offense.",
+	"sorcerer": "Arcane specialist with explosive power.",
+	"warlock": "Dark caster with sustain and curses.",
+	"ranger": "Precision hunter with speed and control.",
+	"rogue": "Elusive striker relying on agility and evasion.",
+}
+
+func _make_advanced_class_card(cd: ClassDef, accent: Color) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.12, 0.12, 0.12, 1.0)
+	st.corner_radius_top_left = 10
+	st.corner_radius_top_right = 10
+	st.corner_radius_bottom_left = 10
+	st.corner_radius_bottom_right = 10
+	st.set_border_width_all(2)
+	st.border_color = accent
+
+	card.set_meta("accent", accent)
+	card.set_meta("base_style", st)
+	card.add_theme_stylebox_override("panel", st)
+
+	var v := VBoxContainer.new()
+	v.offset_left = 14
+	v.offset_right = -14
+	v.offset_top = 12
+	v.offset_bottom = -12
+	card.add_child(v)
+
+	var header := Label.new()
+	header.text = cd.display_name
+	header.add_theme_font_size_override("font_size", 18)
+	v.add_child(header)
+
+	var blurb := Label.new()
+	blurb.text = CLASS_BLURBS.get(cd.id, "An advanced specialization path.")
+	blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	blurb.modulate = Color(0.90, 0.90, 0.90, 1.0)
+	v.add_child(blurb)
+
+	var adv := Label.new()
+	adv.text = _next_advancement_text(cd)
+	adv.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	adv.modulate = Color(0.85, 0.85, 0.85, 1.0)
+	v.add_child(adv)
+
+	var bonus := Label.new()
+	bonus.text = _class_bonus_text(cd)
+	bonus.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	bonus.modulate = Color(0.92, 0.92, 0.92, 1.0)
+	v.add_child(bonus)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(spacer)
+
+	var select_btn := Button.new()
+	select_btn.text = "Select"
+	select_btn.pressed.connect(func() -> void:
+		_class_confirm_btn.disabled = false
+		_class_confirm_btn.set_meta("selected_def_id", cd.id)
+		_refresh_advanced_card_styles()
+	)
+
+	v.add_child(select_btn)
+
+	return card
+
+func _refresh_advanced_card_styles() -> void:
+	var selected_def_id := ""
+	if _class_confirm_btn != null and _class_confirm_btn.has_meta("selected_def_id"):
+		selected_def_id = String(_class_confirm_btn.get_meta("selected_def_id"))
+
+	for def_id in _class_cards.keys():
+		var card: PanelContainer = _class_cards[def_id]
+		var accent: Color = card.get_meta("accent")
+		var st: StyleBoxFlat = card.get_meta("base_style")
+
+		if String(def_id) == selected_def_id:
+			st.set_border_width_all(3)
+			st.bg_color = Color(0.14, 0.14, 0.14, 1.0)
+		else:
+			st.set_border_width_all(2)
+			st.bg_color = Color(0.11, 0.11, 0.11, 1.0)
+
+		st.border_color = accent
+		card.add_theme_stylebox_override("panel", st)
+
+
+func _choose_advanced_class() -> void:
+	if Game.player == null:
+		return
+	if _class_confirm_btn == null or not _class_confirm_btn.has_meta("selected_def_id"):
+		return
+
+	var chosen_id := String(_class_confirm_btn.get_meta("selected_def_id"))
+	Game.player.class_def_id = chosen_id
+
+	SaveManager.save_now()
+	Game.player_changed.emit()
+
+	if _class_select_overlay != null:
+		_class_select_overlay.queue_free()
+		_class_select_overlay = null
+
+	# If they skipped milestones, immediately prompt for the next required tier.
+	call_deferred("_maybe_prompt_advanced_class_selection")
+
+
+func _next_advancement_text(cd: ClassDef) -> String:
+	# Find earliest child unlock level (usually 50 or 75). If none, final tier.
+	var next_unlock := 999999
+	for c in ClassCatalog.children_of(cd.id):
+		next_unlock = mini(next_unlock, int(c.unlock_level))
+
+
+	if next_unlock == 999999:
+		return "Final tier: no further advancements."
+
+	var next_choices: Array[ClassDef] = ClassCatalog.next_choices(cd.id, next_unlock)
+	if next_choices.is_empty():
+		return "Advances at Lv %d: —" % next_unlock
+
+	var names := PackedStringArray()
+	for n in next_choices:
+		names.append(n.display_name)
+
+	return "Advances at Lv %d: %s" % [next_unlock, " or ".join(names)]
+
+func _class_bonus_text(cd: ClassDef) -> String:
+	# Summarize flat passive stats if present
+	if cd.passive_flat == null:
+		return "Bonuses: —"
+
+	var s: Stats = cd.passive_flat
+	var parts := PackedStringArray()
+
+	# These fields match what your game already uses (hp/atk/def/str/int_/agi/etc.)
+	if s.hp != 0: parts.append("HP %+d" % int(s.hp))
+	if s.atk != 0: parts.append("ATK %+d" % int(s.atk))
+	if s.def != 0: parts.append("Armor %+d" % int(s.def))
+	if s.str != 0: parts.append("STR %+d" % int(s.str))
+	if s.int_ != 0: parts.append("INT %+d" % int(s.int_))
+	if s.agi != 0: parts.append("AGI %+d" % int(s.agi))
+	if s.atk_spd != 0: parts.append("Atk Spd %+0.2f" % float(s.atk_spd))
+	if s.crit_chance != 0: parts.append("Crit %+d%%" % int(s.crit_chance))
+	if s.combo_chance != 0: parts.append("Combo %+d%%" % int(s.combo_chance))
+	if s.block != 0: parts.append("Block %+d%%" % int(s.block))
+	if s.avoidance != 0: parts.append("Avoid %+d%%" % int(s.avoidance))
+	if s.regen != 0: parts.append("Regen %+0.2f/s" % float(s.regen))
+
+	return "Bonuses: " + ", ".join(parts)
+
+func _accent_for_base_class(base_class_id: int, variant_index: int) -> Color:
+	# Keep the same color identity as starter popup; slight variation per card.
+	match base_class_id:
+		PlayerModel.ClassId.WARRIOR:
+			return Color(1.00, 0.55 + 0.08 * variant_index, 0.20, 1.0)
+		PlayerModel.ClassId.MAGE:
+			return Color(0.72, 0.42 + 0.06 * variant_index, 1.00, 1.0)
+		PlayerModel.ClassId.ARCHER:
+			return Color(0.30, 1.00, 0.55 + 0.06 * variant_index, 1.0)
+	return Color(0.9, 0.9, 0.9, 1.0)
