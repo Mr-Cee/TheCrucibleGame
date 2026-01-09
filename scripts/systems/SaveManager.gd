@@ -123,6 +123,8 @@ func load_or_new() -> void:
 
 func _new_game() -> void:
 	Game.player = PlayerModel.new()
+	# Require the player to choose a class before combat starts.
+	Game.player.class_id = -1
 	Game.reset_battle_state()
 	Game.player_changed.emit()
 	_log("No valid save found; created new game.")

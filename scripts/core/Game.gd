@@ -13,6 +13,7 @@ signal combat_log_cleared
 #===================================================================================================
 
 var player: PlayerModel
+
 var battle_state: Dictionary = {
 	"difficulty": "Easy",
 	"level": 1,
@@ -94,18 +95,25 @@ func _ready() -> void:
 	
 	player_changed.connect(_battle_on_player_changed)
 
-	_battle_init_if_needed()
-
+	if not class_selection_needed():
+		_battle_init_if_needed()
 	
 	crucible_tick_upgrade_completion()
+
+func class_selection_needed() -> bool:
+	if player == null:
+		return true
+	var cid: int = int(player.class_id)
+	return cid < 0
 
 func _process(delta: float) -> void:
 	_upgrade_check_accum += delta
 	if _upgrade_check_accum >= 1.0:
 		_upgrade_check_accum = 0.0
 		crucible_tick_upgrade_completion()
-	_battle_init_if_needed()
-	_battle_process(delta)
+	if not class_selection_needed():
+		_battle_init_if_needed()
+		_battle_process(delta)
 
 func add_gold(amount:int) -> void:
 	player.gold += amount
@@ -124,12 +132,6 @@ func spend_crucible_key() -> bool:
 	player.crucible_keys -= 1
 	emit_signal("player_changed")
 	return true
-
-#func equip_item(item:GearItem) -> GearItem:
-	#var old:GearItem = player.equipped.get(item.slot, null)
-	#player.equipped[item.slot] = item
-	#emit_signal("player_changed")
-	#return old
 
 func equip_item(item: GearItem) -> GearItem:
 	if item == null:
@@ -343,6 +345,9 @@ func _battle_init_if_needed() -> void:
 	_battle_spawn_enemy(true)
 
 func _battle_on_player_changed() -> void:
+	if class_selection_needed():
+		# Don’t recompute battle stats or touch battle runtime until a class is chosen.
+		return
 	# Gear/level changes should immediately affect combat.
 	_battle_recompute_player_combat()
 	_skills_sync_loadout()

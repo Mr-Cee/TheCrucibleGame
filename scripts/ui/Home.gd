@@ -93,6 +93,7 @@ var _vp_count: int = 0
 var _batch_running: bool = false
 
 var _hud_ui_accum: float = 0.0
+var _class_select_overlay: Control = null
 
 func _fmt_mmss(seconds: int) -> String:
 	seconds = max(0, seconds)
@@ -105,6 +106,13 @@ var _dev_tap_deadline_ms: int = 0
 
 const DEV_TAPS_REQUIRED: int = 7
 const DEV_TAP_WINDOW_MS: int = 1500
+
+var _class_selected_id: int = -1
+var _class_confirm_btn: Button = null
+var _class_hint_lbl: Label = null
+var _class_cards: Dictionary = {} # class_id -> PanelContainer
+
+
 
 #-------------------------------------------------------------------------
 
@@ -166,7 +174,9 @@ func _ready() -> void:
 	# ... plus your existing HUD refresh hookup ...
 	Game.player_changed.connect(_refresh_hud_nonbattle)
 	_refresh_hud_nonbattle()
-
+	
+	# Force class selection before battle begins (new games only).
+	call_deferred("_maybe_prompt_class_selection")
 
 func _process(delta: float) -> void:
 	_hud_ui_accum += delta
@@ -187,7 +197,6 @@ func _process(delta: float) -> void:
 
 	hp_bar.max_value = 100.0
 	hp_bar.value = (php / phpmax) * 100.0
-
 
 func _on_gear_slot_clicked(slot_id: int, item: GearItem) -> void:
 	# Ignore future slots (they’re disabled anyway, but safe)
@@ -784,3 +793,272 @@ func _on_cp_label_gui_input(ev: InputEvent) -> void:
 			dev_popup.call("popup_and_refresh")
 		elif dev_popup:
 			dev_popup.popup_centered(Vector2i(620, 360))
+
+func _maybe_prompt_class_selection() -> void:
+	if _class_select_overlay != null:
+		return
+	if Game.player == null:
+		return
+	if int(Game.player.class_id) >= 0:
+		return
+
+	_class_selected_id = -1
+	_class_cards.clear()
+
+	# Full-screen modal overlay
+	_class_select_overlay = Control.new()
+	_class_select_overlay.name = "ClassSelectOverlay"
+	_class_select_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_class_select_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_class_select_overlay.focus_mode = Control.FOCUS_ALL
+	add_child(_class_select_overlay)
+	_class_select_overlay.grab_focus()
+
+	# Dim background
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.80)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_class_select_overlay.add_child(dim)
+
+	# Main shell panel
+	var shell := PanelContainer.new()
+	shell.anchor_left = 0.5
+	shell.anchor_right = 0.5
+	shell.anchor_top = 0.5
+	shell.anchor_bottom = 0.5
+	shell.offset_left = -520
+	shell.offset_right = 520
+	shell.offset_top = -310
+	shell.offset_bottom = 310
+	shell.mouse_filter = Control.MOUSE_FILTER_STOP
+	_class_select_overlay.add_child(shell)
+
+	var shell_style := StyleBoxFlat.new()
+	shell_style.bg_color = Color(0.10, 0.10, 0.10, 0.98)
+	shell_style.corner_radius_top_left = 10
+	shell_style.corner_radius_top_right = 10
+	shell_style.corner_radius_bottom_left = 10
+	shell_style.corner_radius_bottom_right = 10
+	shell_style.set_border_width_all(1)
+	shell_style.border_color = Color(0.20, 0.20, 0.20, 1.0)
+	shell.add_theme_stylebox_override("panel", shell_style)
+
+	var root := VBoxContainer.new()
+	root.offset_left = 18
+	root.offset_right = -18
+	root.offset_top = 14
+	root.offset_bottom = -14
+	shell.add_child(root)
+
+	var title := Label.new()
+	title.text = "Choose Your Starting Class"
+	title.add_theme_font_size_override("font_size", 22)
+	root.add_child(title)
+
+	var subtitle := Label.new()
+	subtitle.text = "This determines your base stat multipliers"
+	subtitle.modulate = Color(0.85, 0.85, 0.85, 1.0)
+	root.add_child(subtitle)
+
+	root.add_child(HSeparator.new())
+
+	var cards_row := HBoxContainer.new()
+	cards_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cards_row.add_theme_constant_override("separation", 14)
+	root.add_child(cards_row)
+
+	# Warrior (orange)
+	var war := _make_class_card(
+		PlayerModel.ClassId.WARRIOR,
+		"Warrior",
+		"Frontline bruiser with high durability.",
+		_advances_at_25_text(PlayerModel.ClassId.WARRIOR),
+		1.40, 1.30, 0.85,
+		Color(1.00, 0.55, 0.20, 1.0)
+	)
+	cards_row.add_child(war)
+	_class_cards[PlayerModel.ClassId.WARRIOR] = war
+
+	# Mage (purple)
+	var mag := _make_class_card(
+		PlayerModel.ClassId.MAGE,
+		"Mage",
+		"High damage caster with low defenses.",
+		_advances_at_25_text(PlayerModel.ClassId.MAGE),
+		0.85, 0.80, 1.40,
+		Color(0.72, 0.42, 1.00, 1.0)
+	)
+	cards_row.add_child(mag)
+	_class_cards[PlayerModel.ClassId.MAGE] = mag
+
+	# Archer (green)
+	var arc := _make_class_card(
+		PlayerModel.ClassId.ARCHER,
+		"Archer",
+		"Balanced ranged damage with speed and flexibility.",
+		_advances_at_25_text(PlayerModel.ClassId.ARCHER),
+		1.10, 1.00, 1.10,
+		Color(0.30, 1.00, 0.55, 1.0)
+	)
+	cards_row.add_child(arc)
+	_class_cards[PlayerModel.ClassId.ARCHER] = arc
+
+	root.add_child(HSeparator.new())
+
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 12)
+	root.add_child(footer)
+
+	_class_hint_lbl = Label.new()
+	_class_hint_lbl.text = "Select a class, then confirm."
+	_class_hint_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(_class_hint_lbl)
+
+	_class_confirm_btn = Button.new()
+	_class_confirm_btn.text = "Confirm"
+	_class_confirm_btn.disabled = true
+	_class_confirm_btn.pressed.connect(func() -> void:
+		if _class_selected_id >= 0:
+			_choose_class(_class_selected_id)
+	)
+	footer.add_child(_class_confirm_btn)
+
+	_refresh_class_card_styles()
+
+func _choose_class(class_id: int) -> void:
+	if Game.player == null:
+		return
+
+	Game.player.class_id = class_id
+
+	# If your skills/class framework exists, reset and seed it for the chosen base class.
+	# (This prevents “carrying” warrior starter skills into mage, etc.)
+	if Game.player.has_method("ensure_class_and_skills_initialized"):
+		if "class_def_id" in Game.player: # (If you have it as a property; safe to remove if not needed)
+			Game.player.class_def_id = ""
+		# These properties exist in your skill framework—leave if present in your project.
+		if Game.player.has_method("set"): # always true, but harmless
+			# If these properties exist, clearing them forces reseed.
+			if Game.player.get("skill_levels") != null:
+				Game.player.skill_levels = {}
+			if Game.player.get("equipped_active_skills") != null:
+				Game.player.equipped_active_skills = []
+			if Game.player.get("equipped_passive_skills") != null:
+				Game.player.equipped_passive_skills = []
+		Game.player.ensure_class_and_skills_initialized()
+
+	# Start battle normally from a clean baseline
+	Game.reset_battle_state()
+	Game.player_changed.emit()
+	SaveManager.save_now()
+
+	if _class_select_overlay != null:
+		_class_select_overlay.queue_free()
+		_class_select_overlay = null
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _class_select_overlay == null:
+		return
+
+	# Swallow escape / cancel so the popup cannot be dismissed.
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+
+func _make_class_card(class_id: int, name: String, blurb: String, advances: String,
+		hp_mult: float, armor_mult: float, dmg_mult: float, accent: Color) -> PanelContainer:
+
+	var card := PanelContainer.new()
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.12, 0.12, 0.12, 1.0)
+	st.corner_radius_top_left = 10
+	st.corner_radius_top_right = 10
+	st.corner_radius_bottom_left = 10
+	st.corner_radius_bottom_right = 10
+	st.set_border_width_all(2)
+	st.border_color = accent
+
+	card.set_meta("accent", accent)
+	card.set_meta("base_style", st)
+	card.add_theme_stylebox_override("panel", st)
+
+	var v := VBoxContainer.new()
+	v.offset_left = 14
+	v.offset_right = -14
+	v.offset_top = 12
+	v.offset_bottom = -12
+	card.add_child(v)
+
+	var header := Label.new()
+	header.text = name
+	header.add_theme_font_size_override("font_size", 18)
+	v.add_child(header)
+
+	var desc := Label.new()
+	desc.text = blurb
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.modulate = Color(0.90, 0.90, 0.90, 1.0)
+	v.add_child(desc)
+
+	var adv := Label.new()
+	adv.text = advances
+	adv.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	adv.modulate = Color(0.85, 0.85, 0.85, 1.0)
+	v.add_child(adv)
+
+	v.add_child(HSeparator.new())
+
+	var mult := Label.new()
+	mult.text = "HP x%.2f  |  Armor x%.2f  |  Damage x%.2f" % [hp_mult, armor_mult, dmg_mult]
+	mult.modulate = Color(0.92, 0.92, 0.92, 1.0)
+	v.add_child(mult)
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(spacer)
+
+	var select_btn := Button.new()
+	select_btn.text = "Select"
+	select_btn.pressed.connect(func() -> void:
+		_class_selected_id = class_id
+		_class_confirm_btn.disabled = false
+		_refresh_class_card_styles()
+	)
+	v.add_child(select_btn)
+
+	return card
+
+func _refresh_class_card_styles() -> void:
+	for cid in _class_cards.keys():
+		var card: PanelContainer = _class_cards[cid]
+		var accent: Color = card.get_meta("accent")
+		var st: StyleBoxFlat = card.get_meta("base_style")
+
+		if int(cid) == _class_selected_id:
+			st.set_border_width_all(3)
+			st.bg_color = Color(0.14, 0.14, 0.14, 1.0)
+		else:
+			st.set_border_width_all(2)
+			st.bg_color = Color(0.11, 0.11, 0.11, 1.0)
+
+		st.border_color = accent
+		card.add_theme_stylebox_override("panel", st)
+
+func _advances_at_25_text(base_class_id: int) -> String:
+	var base_def: ClassDef = ClassCatalog.base_def_for_class_id(base_class_id)
+	if base_def == null:
+		return "Advances at Lv 25: —"
+
+	# We want the preview for level 25 even though player level is 1 here.
+	var choices: Array[ClassDef] = ClassCatalog.next_choices(base_def.id, 25)
+	if choices.is_empty():
+		return "Advances at Lv 25: —"
+
+	var names := PackedStringArray()
+	for c in choices:
+		names.append(c.display_name)
+
+	return "Advances at Lv 25: " + " or ".join(names)

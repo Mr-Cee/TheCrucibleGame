@@ -253,6 +253,8 @@ func battlepass_active(now_unix: int) -> bool:
 	return battlepass_expires_unix > now_unix
 
 func ensure_class_and_skills_initialized() -> void:
+	if int(class_id) < 0:
+		return
 	#call this after loading or creating a new player
 	if class_def_id == "":
 		var base_def: ClassDef = ClassCatalog.base_def_for_class_id(class_id)
