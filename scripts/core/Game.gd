@@ -118,7 +118,6 @@ func class_selection_needed() -> bool:
 
 	return false
 
-
 func _process(delta: float) -> void:
 	_upgrade_check_accum += delta
 	if _upgrade_check_accum >= 1.0:
@@ -138,6 +137,19 @@ func add_battle_rewards(gold_amount: int, key_amount: int) -> void:
 	if key_amount != 0:
 		player.crucible_keys += key_amount
 	player_changed.emit()
+
+func dev_set_character_level(new_level: int, reset_xp: bool = true) -> void:
+	if player == null:
+		return
+
+	new_level = maxi(1, new_level)
+
+	player.level = new_level
+	if reset_xp:
+		player.xp = 0
+
+	player_changed.emit()
+	SaveManager.save_now()
 
 func spend_crucible_key() -> bool:
 	if player.crucible_keys <= 0:

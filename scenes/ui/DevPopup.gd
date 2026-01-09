@@ -11,6 +11,9 @@ extends Window
 @onready var set_battle_button: Button = $VBox/BattleRow/SetBattleButton
 @onready var battle_preview: Label = $VBox/BattlePreview
 
+@onready var level_spin_box: SpinBox = $VBox/LevelSelectRow/LevelSpinBox
+@onready var set_level_btn: Button = $VBox/LevelSelectRow/SetLevelButton
+
 var _offline_row: HBoxContainer
 var _offline_hours: SpinBox
 var _offline_mins: SpinBox
@@ -44,6 +47,9 @@ func _ready() -> void:
 
 	amount_edit.text = "100"
 	amount_edit.placeholder_text = "Amount"
+	
+	if Game.player != null:
+		level_spin_box.value = int(Game.player.level)
 
 	level_spin.step = 1
 	stage_spin.step = 1
@@ -52,6 +58,7 @@ func _ready() -> void:
 	stage_spin.value_changed.connect(func(_v: float) -> void: _refresh_battle_preview())
 	wave_spin.value_changed.connect(func(_v: float) -> void: _refresh_battle_preview())
 	diff_select.item_selected.connect(func(_i: int) -> void: _refresh_battle_preview())
+	set_level_btn.pressed.connect(_on_set_level_pressed)
 
 	_refresh_from_game()
 	_build_offline_controls()
@@ -294,3 +301,8 @@ func _on_apply_offline_pressed() -> void:
 		Game.inventory_event.emit("Dev: applied offline rewards.")
 	else:
 		Game.inventory_event.emit("Dev: no offline rewards applied (too small / capped / none).")
+
+func _on_set_level_pressed() -> void:
+	if Game.player == null:
+		return
+	Game.dev_set_character_level(int(level_spin_box.value), true)

@@ -1257,6 +1257,26 @@ text = "Preview: Easy - Lv 1 - Stage1 - Wave 1"
 [node name="Separator2" type="HSeparator" parent="DevPopup/VBox"]
 layout_mode = 2
 
+[node name="LevelSelectRow" type="HBoxContainer" parent="DevPopup/VBox"]
+layout_mode = 2
+
+[node name="LevelLabel" type="Label" parent="DevPopup/VBox/LevelSelectRow"]
+layout_mode = 2
+text = "Character Level: "
+
+[node name="LevelSpinBox" type="SpinBox" parent="DevPopup/VBox/LevelSelectRow"]
+layout_mode = 2
+min_value = 1.0
+max_value = 9999.0
+value = 1.0
+
+[node name="SetLevelButton" type="Button" parent="DevPopup/VBox/LevelSelectRow"]
+layout_mode = 2
+text = "Set Level"
+
+[node name="Separator3" type="HSeparator" parent="DevPopup/VBox"]
+layout_mode = 2
+
 [node name="CloseButton" type="Button" parent="DevPopup/VBox"]
 layout_mode = 2
 text = "Close"
