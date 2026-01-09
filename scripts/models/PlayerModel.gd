@@ -46,10 +46,11 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 # ============== Class / Skills (MVP) ==================
 # Tracks the player's selected node in the class tree (e.g. "warrior", "knight", etc.)
 @export var class_def_id: String = ""
-
-@export var skill_levels: Dictionary = {}                   #skill_id -> int (>=1)
-@export var equipped_active_skills: Array[String] = []      #List of skill_ids(active)
+const ACTIVE_SKILL_SLOTS: int = 5
+@export var skill_auto: bool = true
+@export var equipped_active_skills: Array[String] = []  # length 5
 @export var equipped_passive_skills: Array[String] = []     #list of skill_ids(passive)
+@export var skill_levels: Dictionary = {}               # skill_id -> level (int)
 
 # Crucible upgrade persistence
 var crucible_upgrade_paid_stages: int = 0
@@ -141,6 +142,7 @@ func to_dict() -> Dictionary:
 		"skill_levels": skill_levels,
 		"equipped_active_skills": equipped_active_skills,
 		"equipped_passive_skills": equipped_passive_skills,
+		"skill_auto": skill_auto,
 		"crucible_keys": crucible_keys,
 		"crucible_level": crucible_level,
 		"equipped": eq_out,
@@ -171,24 +173,21 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.class_id = int(d.get("class_id", 0))
 	p.class_def_id = String(d.get("class_def_id", ""))
 	
-	var slv: Variant = d.get("skill_levels", {})
-	p.skill_levels = {}
-	if typeof(slv) == TYPE_DICTIONARY:
-		p.skill_levels = slv as Dictionary
-		
-	var eas: Variant = d.get("equipped_active_skills", [])
+	p.skill_auto = bool(d.get("skill_auto", true))
 	p.equipped_active_skills = []
-	if typeof(eas) == TYPE_ARRAY:
-		for v in eas:
-			if v != null:
-				p.equipped_active_skills.append(String(v))	
-	var eps: Variant = d.get("equipped_passive_skills", [])
+	var eas_v: Variant = d.get("equipped_active_skills", [])
+	if typeof(eas_v) == TYPE_ARRAY:
+		for v in (eas_v as Array):
+			p.equipped_active_skills.append(String(v))
 	p.equipped_passive_skills = []
-	if typeof(eps) == TYPE_ARRAY:
-		for v in eps:
-			if v!= null:
-				p.equipped_passive_skills.append(String(v))
-				
+	var eps_v: Variant = d.get("equipped_passive_skills", [])
+	if typeof(eps_v) == TYPE_ARRAY:
+		for v in (eps_v as Array):
+			p.equipped_passive_skills.append(String(v))
+
+	p.skill_levels = d.get("skill_levels", {})
+	p.ensure_active_skills_initialized()
+	
 	p.crucible_keys = int(d.get("crucible_keys", 0))
 	p.crucible_level = int(d.get("crucible_level", 1))
 	p.crucible_batch = int(d.get("crucible_batch", 1))
@@ -275,7 +274,27 @@ func ensure_class_and_skills_initialized() -> void:
 		
 	if equipped_passive_skills.is_empty():
 		equipped_passive_skills = SkillCatalog.starting_passives_for_class(class_id)
-		
+
+func ensure_active_skills_initialized() -> void:
+	if equipped_active_skills == null:
+		equipped_active_skills = []
+	while equipped_active_skills.size() < ACTIVE_SKILL_SLOTS:
+		equipped_active_skills.append("")
+	if equipped_active_skills.size() > ACTIVE_SKILL_SLOTS:
+		equipped_active_skills = equipped_active_skills.slice(0, ACTIVE_SKILL_SLOTS)
+
+	if skill_levels == null:
+		skill_levels = {}
+
+	# TEMP: grant all active skills at level 1 so you can test immediately.
+	# Replace later with your unlock/loot logic.
+	if skill_levels.size() == 0:
+		for id in SkillCatalog.all_active_ids():
+			skill_levels[id] = 1
+		var starter := SkillCatalog.starter_loadout()
+		for i in range(ACTIVE_SKILL_SLOTS):
+			equipped_active_skills[i] = starter[i] if i < starter.size() else ""
+
 func get_skill_level(skill_id: String) -> int:
 	if skill_id == "":
 		return 0

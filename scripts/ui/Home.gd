@@ -58,6 +58,10 @@ extends Control
 
 @onready var dev_popup: Window = $DevPopup
 
+@onready var skills_button: Button = $RootMargin/RootVBox/TownNav/TownNavRow/SkillsBtn
+
+
+
 #----------------------------------------------------------------
 
 signal compare_resolved
@@ -122,6 +126,31 @@ var _rename_line: LineEdit = null
 var _rename_status: Label = null
 var _rename_confirm: Button = null
 
+func _on_skills_pressed() -> void:
+	var panel := SkillsPanel.new()
+	add_child(panel)
+	
+func _refresh_skill_buttons() -> void:
+	for i in range(5):
+		var btn: Button = get_node("SkillBtn%d" % (i + 1))
+		var id := Game.get_equipped_active_skill_id(i)
+		if id == "":
+			btn.text = "(Empty)"
+			btn.disabled = true
+			continue
+
+		var def := SkillCatalog.get_def(id)
+		var name := def.display_name if def != null else id
+
+		var rem := Game.get_skill_cooldown_remaining(i)
+		if rem > 0.0:
+			btn.text = "%s\n%.1fs" % [name, rem]
+			btn.disabled = true
+		else:
+			btn.text = name
+			btn.disabled = false
+
+
 #-------------------------------------------------------------------------
 
 func _ready() -> void:
@@ -130,7 +159,20 @@ func _ready() -> void:
 	equip_button.pressed.connect(_on_equip_pressed)
 	sell_button.pressed.connect(_on_sell_pressed)
 	close_button.pressed.connect(_on_close_pressed)
+	skills_button.pressed.connect(_on_skills_pressed)
 	dev_popup.visible = false
+	
+	$RootMargin/RootVBox/BattleSection/SkillsRow/AutoSkillsToggle.button_pressed = Game.skills_auto_enabled()
+	$RootMargin/RootVBox/BattleSection/SkillsRow/AutoSkillsToggle.toggled.connect(func(v: bool) -> void:
+		Game.set_skills_auto_enabled(v)
+	)
+
+	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn1.pressed.connect(func(): Game.request_cast_active_skill(0))
+	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn2.pressed.connect(func(): Game.request_cast_active_skill(1))
+	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn3.pressed.connect(func(): Game.request_cast_active_skill(2))
+	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn4.pressed.connect(func(): Game.request_cast_active_skill(3))
+	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn5.pressed.connect(func(): Game.request_cast_active_skill(4))
+
 
 	if cp_label:
 		cp_label.gui_input.connect(_on_cp_label_gui_input)
@@ -154,6 +196,7 @@ func _ready() -> void:
 	rarity_option.item_selected.connect(_on_rarity_selected)
 	auto_sell_check.toggled.connect(_on_auto_sell_toggled)
 	start_stop_button.pressed.connect(_on_start_stop_auto_pressed)
+	
 	
 	#Crucible Upgrade Popup
 	upgrade_button.pressed.connect(func() -> void:

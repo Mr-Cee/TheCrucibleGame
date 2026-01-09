@@ -13,7 +13,6 @@ signal combat_log_cleared
 #===================================================================================================
 
 var player: PlayerModel
-
 var battle_state: Dictionary = {
 	"difficulty": "Easy",
 	"level": 1,
@@ -48,18 +47,6 @@ var _p_combo: float = 0.0       # percent points (can exceed 100)
 var _p_block: float = 0.0       # percent points
 var _p_avoid: float = 0.0       # percent points
 
-#Damage multipliers derived from stats
-var _p_crit_mult: float = 1.5          # default: 50% crit damage
-var _p_combo_extra_mult: float = 0.5   # default: extra hit does 50% damage
-var _p_regen: float = 0.0              #HP per second
-var _p_skill_cd_mult: float = 1.0      # multiplier on skill cooldown, INT reduces this
-
-# Cache of players computed total stats (so skills can scale off STR/INT/AGI, etc.)
-var _p_stats: Stats = null
-
-# Active skill cooldown runtime (skill_id -> remaining seconds)
-var _skill_cd: Dictionary = {}
-
 # Enemy combat
 var _e_atk: float = 1.0
 var _e_def: float = 0.0
@@ -81,6 +68,22 @@ var _agg_player_hits: Dictionary = {"count": 0, "dmg": 0, "crits": 0, "combos": 
 var _agg_enemy_hits: Dictionary = {"count": 0, "dmg": 0, "blocks": 0, "avoids": 0}
 var _agg_rewards: Dictionary = {"gold": 0, "keys": 0, "waves": 0, "boss_waves": 0}
 var _agg_flush_accum: float = 0.0
+
+#===================================================================================================
+# Skills (Active) runtime
+#===================================================================================================
+
+const ACTIVE_SKILL_SLOTS: int = 5
+const SKILL_GLOBAL_GCD: float = 0.25  # slight delay between skill activations to prevent stacking
+
+# Per-slot cooldown remaining (seconds, scaled by battle speed)
+var _skill_cd: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+# Queue of slot indices waiting to cast once global lock clears
+var _skill_queue: Array[int] = []
+
+# Global lock remaining (seconds, scaled by battle speed)
+var _skill_lock: float = 0.0
 const AGG_FLUSH_INTERVAL: float = 0.35
 
 #===================================================================================================
@@ -95,37 +98,18 @@ func _ready() -> void:
 	
 	player_changed.connect(_battle_on_player_changed)
 
-	if not class_selection_needed():
-		_battle_init_if_needed()
+	_battle_init_if_needed()
+
 	
 	crucible_tick_upgrade_completion()
-
-func class_selection_needed() -> bool:
-	if player == null:
-		return true
-	if int(player.class_id) < 0:
-		return true
-
-	# Advanced class pending?
-	var cid := ""
-	if player.has_method("ensure_class_and_skills_initialized"):
-		player.ensure_class_and_skills_initialized()
-	cid = String(player.get("class_def_id"))
-	if cid != "":
-		var pending: Array[ClassDef] = ClassCatalog.next_choices(cid, int(player.level))
-		if not pending.is_empty():
-			return true
-
-	return false
 
 func _process(delta: float) -> void:
 	_upgrade_check_accum += delta
 	if _upgrade_check_accum >= 1.0:
 		_upgrade_check_accum = 0.0
 		crucible_tick_upgrade_completion()
-	if not class_selection_needed():
-		_battle_init_if_needed()
-		_battle_process(delta)
+	_battle_init_if_needed()
+	_battle_process(delta)
 
 func add_gold(amount:int) -> void:
 	player.gold += amount
@@ -138,25 +122,18 @@ func add_battle_rewards(gold_amount: int, key_amount: int) -> void:
 		player.crucible_keys += key_amount
 	player_changed.emit()
 
-func dev_set_character_level(new_level: int, reset_xp: bool = true) -> void:
-	if player == null:
-		return
-
-	new_level = maxi(1, new_level)
-
-	player.level = new_level
-	if reset_xp:
-		player.xp = 0
-
-	player_changed.emit()
-	SaveManager.save_now()
-
 func spend_crucible_key() -> bool:
 	if player.crucible_keys <= 0:
 		return false
 	player.crucible_keys -= 1
 	emit_signal("player_changed")
 	return true
+
+#func equip_item(item:GearItem) -> GearItem:
+	#var old:GearItem = player.equipped.get(item.slot, null)
+	#player.equipped[item.slot] = item
+	#emit_signal("player_changed")
+	#return old
 
 func equip_item(item: GearItem) -> GearItem:
 	if item == null:
@@ -242,6 +219,7 @@ func crucible_required_payment_stages(current_level: int) -> int:
 func crucible_stage_cost_gold(current_level: int, stage_index: int) -> int:
 	# stage_index intentionally ignored: all stages within a level cost the same.
 	return Catalog.crucible_upgrade_stage_cost_gold(current_level)
+
 
 func crucible_upgrade_time_seconds(current_level: int) -> int:
 	return Catalog.crucible_upgrade_time_seconds(current_level)
@@ -361,8 +339,10 @@ func _battle_init_if_needed() -> void:
 		return
 
 	_battle_inited = true
+	_skills_ensure_player_initialized()
+	_skills_init_runtime()
+	_battle_reset_effects()
 	_battle_recompute_player_combat()
-	_skills_sync_loadout()
 
 	battle_runtime["player_hp_max"] = _p_hp_max
 	battle_runtime["player_hp"] = _p_hp_max
@@ -370,16 +350,13 @@ func _battle_init_if_needed() -> void:
 	_battle_spawn_enemy(true)
 
 func _battle_on_player_changed() -> void:
-	if class_selection_needed():
-		# Don’t recompute battle stats or touch battle runtime until a class is chosen.
-		return
 	# Gear/level changes should immediately affect combat.
 	_battle_recompute_player_combat()
-	_skills_sync_loadout()
 
-	# Update max HP and clamp current HP
-	battle_runtime["player_hp_max"] = _p_hp_max
-	battle_runtime["player_hp"] = clamp(float(battle_runtime.get("player_hp")), 0.0, _p_hp_max)
+	# If we have no HP set yet, initialize.
+	if float(battle_runtime.get("player_hp_max", 0.0)) <= 0.0:
+		battle_runtime["player_hp_max"] = _p_hp_max
+		battle_runtime["player_hp"] = _p_hp_max
 
 	battle_changed.emit()
 
@@ -396,6 +373,380 @@ func _battle_speed_multiplier() -> float:
 		3: return 10.0
 	return 1.0
 
+#===================================================================================================
+# Active Skills API (UI)
+#===================================================================================================
+
+func skills_auto_enabled() -> bool:
+	if player == null:
+		return true
+	if player.has_method("get") and player.get("skill_auto") != null:
+		return bool(player.get("skill_auto"))
+	# Backwards compatibility
+	return true
+
+func set_skills_auto_enabled(enabled: bool) -> void:
+	if player == null:
+		return
+	# Persist on player
+	player.set("skill_auto", enabled)
+	player_changed.emit()
+
+func get_equipped_active_skill_id(slot: int) -> String:
+	if player == null:
+		return ""
+	var arr: Array = player.get("equipped_active_skills")
+	if arr == null:
+		return ""
+	if slot < 0 or slot >= arr.size():
+		return ""
+	return String(arr[slot])
+
+func get_skill_cooldown_remaining(slot: int) -> float:
+	if slot < 0 or slot >= _skill_cd.size():
+		return 0.0
+	return max(0.0, float(_skill_cd[slot]))
+
+func get_skill_cooldown_total(slot: int) -> float:
+	var id := get_equipped_active_skill_id(slot)
+	if id == "":
+		return 0.0
+	var def := SkillCatalog.get_def(id)
+	if def == null:
+		return 0.0
+	# If you later wire INT into cooldown reduction, swap in def.effective_cooldown(int_stat)
+	return float(def.cooldown)
+
+func request_cast_active_skill(slot: int) -> void:
+	# Manual request. In auto-mode the system enqueues automatically.
+	if slot < 0 or slot >= ACTIVE_SKILL_SLOTS:
+		return
+	_enqueue_skill_slot(slot)
+
+#===================================================================================================
+# Active Skills runtime
+#===================================================================================================
+
+func _skills_init_runtime() -> void:
+	_skill_cd = [0.0, 0.0, 0.0, 0.0, 0.0]
+	_skill_queue = []
+	_skill_lock = 0.0
+
+func _skills_ensure_player_initialized() -> void:
+	if player == null:
+		return
+	if player.has_method("ensure_active_skills_initialized"):
+		player.call("ensure_active_skills_initialized")
+
+func _enqueue_skill_slot(slot: int) -> void:
+	if player == null:
+		return
+	_skills_ensure_player_initialized()
+
+	var id := get_equipped_active_skill_id(slot)
+	if id == "":
+		return
+	if SkillCatalog.get_def(id) == null:
+		return
+
+	# Not ready yet
+	if float(_skill_cd[slot]) > 0.0:
+		return
+
+	# Avoid duplicate queue entries
+	if _skill_queue.has(slot):
+		return
+
+	_skill_queue.append(slot)
+
+func _skills_tick(dt: float) -> void:
+	# Cooldowns
+	for i in range(_skill_cd.size()):
+		if _skill_cd[i] > 0.0:
+			_skill_cd[i] = max(0.0, _skill_cd[i] - dt)
+
+	# Global lock
+	if _skill_lock > 0.0:
+		_skill_lock = max(0.0, _skill_lock - dt)
+
+	# Auto-enqueue ready skills
+	if skills_auto_enabled():
+		for i in range(ACTIVE_SKILL_SLOTS):
+			_enqueue_skill_slot(i)
+
+	# Cast if possible
+	if _skill_lock <= 0.0 and _skill_queue.size() > 0:
+		var slot := int(_skill_queue.pop_front())
+		_cast_skill_from_slot(slot)
+
+func _cast_skill_from_slot(slot: int) -> void:
+	var id := get_equipped_active_skill_id(slot)
+	if id == "":
+		return
+	var def := SkillCatalog.get_def(id)
+	if def == null:
+		return
+
+	# If we became busy, re-queue
+	if _skill_lock > 0.0:
+		_enqueue_skill_slot(slot)
+		return
+
+	# Double-check ready
+	if float(_skill_cd[slot]) > 0.0:
+		return
+
+	# Apply effects
+	_apply_active_skill(def, slot)
+
+	# Start cooldown + lock
+	_skill_cd[slot] = float(def.cooldown)
+	_skill_lock = SKILL_GLOBAL_GCD
+
+func _apply_active_skill(def: SkillDef, slot: int) -> void:
+	# Basic scaling using cached combat values.
+	# Later you can incorporate STR/INT/AGI and skill rarities/levels.
+	var lvl: int = 1
+	if player != null:
+		var sl: Variant = player.get("skill_levels")
+		if typeof(sl) == TYPE_DICTIONARY and (sl as Dictionary).has(def.id):
+			lvl = int((sl as Dictionary)[def.id])
+
+	var mult := def.level_multiplier(lvl)
+
+	match def.effect:
+		SkillDef.EffectType.DAMAGE:
+			var raw := _p_atk * def.power * mult
+			_skill_deal_damage(def, raw)
+
+		SkillDef.EffectType.MULTI_HIT:
+			var per := _p_atk * def.power * mult
+			var total := 0.0
+			for _i in range(maxi(1, def.hits)):
+				total += _apply_defense(per, _enemy_def_effective())
+			battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - total)
+			log_combat("skill", "normal", "[color=#B58CFF]%s[/color] hits %dx for [b]%d[/b]" % [def.display_name, maxi(1, def.hits), int(round(total))])
+
+		SkillDef.EffectType.DOT:
+			# Immediate hit + DoT
+			if def.power > 0.0:
+				var raw := _p_atk * def.power * mult
+				_skill_deal_damage(def, raw)
+			# DoT DPS stacks additively
+			var dps_add := _p_atk * def.secondary_power * mult
+			battle_runtime["enemy_dot_dps"] = float(battle_runtime.get("enemy_dot_dps", 0.0)) + dps_add
+			battle_runtime["enemy_dot_time"] = max(float(battle_runtime.get("enemy_dot_time", 0.0)), def.duration)
+			log_combat("skill", "normal", "[color=#B58CFF]%s[/color] applies DoT" % def.display_name)
+
+		SkillDef.EffectType.HEAL:
+			var heal := _p_hp_max * def.power * mult
+			_skill_heal(def, heal)
+
+		SkillDef.EffectType.HOT:
+			battle_runtime["player_hot_hps"] = float(battle_runtime.get("player_hot_hps", 0.0)) + (_p_hp_max * def.secondary_power * mult)
+			battle_runtime["player_hot_time"] = max(float(battle_runtime.get("player_hot_time", 0.0)), def.duration)
+			log_combat("skill", "heal", "[color=#B58CFF]%s[/color] applies healing over time" % def.display_name)
+
+		SkillDef.EffectType.SHIELD:
+			var shield := _p_hp_max * def.power * mult
+			battle_runtime["player_shield"] = float(battle_runtime.get("player_shield", 0.0)) + shield
+			log_combat("skill", "shield", "[color=#B58CFF]%s[/color] grants a shield of [b]%d[/b]" % [def.display_name, int(round(shield))])
+
+			# Special-case: Second Wind also heals a bit
+			if def.id == "second_wind":
+				var heal2 := _p_hp_max * 0.12 * mult
+				_skill_heal(def, heal2, true)
+
+		SkillDef.EffectType.STUN:
+			if def.power > 0.0:
+				var raw := _p_atk * def.power * mult
+				_skill_deal_damage(def, raw)
+			battle_runtime["enemy_stun_time"] = max(float(battle_runtime.get("enemy_stun_time", 0.0)), def.duration)
+			log_combat("skill", "cc", "[color=#B58CFF]%s[/color] stuns the enemy" % def.display_name)
+
+		SkillDef.EffectType.SLOW:
+			if def.power > 0.0:
+				var raw := _p_atk * def.power * mult
+				_skill_deal_damage(def, raw)
+			_apply_enemy_timed_mult("enemy_aps_mult", "enemy_aps_time", 1.0 - clamp(def.magnitude, 0.0, 0.80), def.duration)
+			log_combat("skill", "cc", "[color=#B58CFF]%s[/color] slows the enemy" % def.display_name)
+
+		SkillDef.EffectType.WEAKEN:
+			if def.power > 0.0:
+				var raw := _p_atk * def.power * mult
+				_skill_deal_damage(def, raw)
+			_apply_enemy_timed_mult("enemy_atk_mult", "enemy_atk_time", 1.0 - clamp(def.magnitude, 0.0, 0.80), def.duration)
+			log_combat("skill", "debuff", "[color=#B58CFF]%s[/color] weakens the enemy" % def.display_name)
+
+		SkillDef.EffectType.ARMOR_BREAK:
+			if def.power > 0.0:
+				var raw := _p_atk * def.power * mult
+				_skill_deal_damage(def, raw)
+			_apply_enemy_timed_mult("enemy_def_mult", "enemy_def_time", 1.0 - clamp(def.magnitude, 0.0, 0.80), def.duration)
+			log_combat("skill", "debuff", "[color=#B58CFF]%s[/color] reduces enemy defense" % def.display_name)
+
+		SkillDef.EffectType.VULNERABILITY:
+			_apply_enemy_timed_mult("enemy_vuln_mult", "enemy_vuln_time", 1.0 + clamp(def.magnitude, 0.0, 3.0), def.duration)
+			log_combat("skill", "debuff", "[color=#B58CFF]%s[/color] marks the enemy" % def.display_name)
+
+		SkillDef.EffectType.BUFF_ATK:
+			_apply_player_timed_mult("player_atk_mult", "player_atk_time", 1.0 + clamp(def.magnitude, 0.0, 3.0), def.duration)
+			log_combat("skill", "buff", "[color=#B58CFF]%s[/color] increases your attack" % def.display_name)
+
+		SkillDef.EffectType.BUFF_DEF:
+			_apply_player_timed_mult("player_def_mult", "player_def_time", 1.0 + clamp(def.magnitude, 0.0, 3.0), def.duration)
+			log_combat("skill", "buff", "[color=#B58CFF]%s[/color] increases your defense" % def.display_name)
+
+		SkillDef.EffectType.BUFF_APS:
+			_apply_player_timed_mult("player_aps_mult", "player_aps_time", 1.0 + clamp(def.magnitude, 0.0, 3.0), def.duration)
+			log_combat("skill", "buff", "[color=#B58CFF]%s[/color] increases your attack speed" % def.display_name)
+
+		SkillDef.EffectType.BUFF_AVOID:
+			battle_runtime["player_avoid_pp_add"] = float(def.magnitude)
+			battle_runtime["player_avoid_time"] = max(float(battle_runtime.get("player_avoid_time", 0.0)), def.duration)
+			log_combat("skill", "buff", "[color=#B58CFF]%s[/color] increases your avoidance" % def.display_name)
+
+		SkillDef.EffectType.BUFF_CRIT:
+			battle_runtime["player_crit_pp_add"] = float(def.magnitude)
+			battle_runtime["player_crit_time"] = max(float(battle_runtime.get("player_crit_time", 0.0)), def.duration)
+			log_combat("skill", "buff", "[color=#B58CFF]%s[/color] increases your crit chance" % def.display_name)
+
+		SkillDef.EffectType.COOLDOWN_REDUCE_OTHERS:
+			for i in range(ACTIVE_SKILL_SLOTS):
+				if i == slot:
+					continue
+				_skill_cd[i] = max(0.0, float(_skill_cd[i]) - def.power)
+			log_combat("skill", "buff", "[color=#B58CFF]%s[/color] hastens your other skills" % def.display_name)
+
+		SkillDef.EffectType.LIFE_DRAIN:
+			var raw := _p_atk * def.power * mult
+			var dealt := _apply_defense(raw, _enemy_def_effective())
+			battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
+			var heal: float = float(dealt) * clampf(float(def.magnitude), 0.0, 2.0)
+			_skill_heal(def, heal, true)
+			log_combat("skill", "heal", "[color=#B58CFF]%s[/color] drains [b]%d[/b] and heals [b]%d[/b]" % [def.display_name, int(round(dealt)), int(round(heal))])
+
+func _skill_deal_damage(def: SkillDef, raw: float) -> void:
+	var dealt := _apply_defense(raw, _enemy_def_effective())
+	# Vulnerability multiplier
+	dealt *= _enemy_vuln_mult()
+	battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
+	log_combat("skill", "normal", "[color=#B58CFF]%s[/color] deals [b]%d[/b]" % [def.display_name, int(round(dealt))])
+
+func _skill_heal(def: SkillDef, amount: float, quiet: bool = false) -> void:
+	var hp := float(battle_runtime.get("player_hp", 0.0))
+	var hp_max := float(battle_runtime.get("player_hp_max", 1.0))
+	var healed: float = clampf(float(amount), 0.0, maxf(0.0, float(hp_max) - float(hp)))
+	battle_runtime["player_hp"] = hp + healed
+	if not quiet:
+		log_combat("skill", "heal", "[color=#B58CFF]%s[/color] heals [b]%d[/b]" % [def.display_name, int(round(healed))])
+
+func _apply_enemy_timed_mult(mult_key: String, time_key: String, mult: float, time: float) -> void:
+	battle_runtime[mult_key] = mult
+	battle_runtime[time_key] = max(float(battle_runtime.get(time_key, 0.0)), time)
+
+func _apply_player_timed_mult(mult_key: String, time_key: String, mult: float, time: float) -> void:
+	battle_runtime[mult_key] = mult
+	battle_runtime[time_key] = max(float(battle_runtime.get(time_key, 0.0)), time)
+
+func _enemy_def_effective() -> float:
+	return _e_def * float(battle_runtime.get("enemy_def_mult", 1.0))
+
+func _enemy_atk_mult() -> float:
+	return float(battle_runtime.get("enemy_atk_mult", 1.0))
+
+func _enemy_aps_mult() -> float:
+	return float(battle_runtime.get("enemy_aps_mult", 1.0))
+
+func _enemy_vuln_mult() -> float:
+	return float(battle_runtime.get("enemy_vuln_mult", 1.0))
+
+func _player_atk_mult() -> float:
+	return float(battle_runtime.get("player_atk_mult", 1.0))
+
+func _player_def_mult() -> float:
+	return float(battle_runtime.get("player_def_mult", 1.0))
+
+func _player_aps_mult() -> float:
+	return float(battle_runtime.get("player_aps_mult", 1.0))
+
+func _battle_reset_effects() -> void:
+	# Player
+	battle_runtime["player_shield"] = 0.0
+	battle_runtime["player_hot_dps"] = 0.0
+	battle_runtime["player_hot_hps"] = 0.0
+	battle_runtime["player_hot_time"] = 0.0
+
+	battle_runtime["player_atk_mult"] = 1.0
+	battle_runtime["player_atk_time"] = 0.0
+	battle_runtime["player_def_mult"] = 1.0
+	battle_runtime["player_def_time"] = 0.0
+	battle_runtime["player_aps_mult"] = 1.0
+	battle_runtime["player_aps_time"] = 0.0
+	battle_runtime["player_avoid_pp_add"] = 0.0
+	battle_runtime["player_avoid_time"] = 0.0
+	battle_runtime["player_crit_pp_add"] = 0.0
+	battle_runtime["player_crit_time"] = 0.0
+
+	# Enemy
+	battle_runtime["enemy_stun_time"] = 0.0
+	battle_runtime["enemy_dot_dps"] = 0.0
+	battle_runtime["enemy_dot_time"] = 0.0
+
+	battle_runtime["enemy_atk_mult"] = 1.0
+	battle_runtime["enemy_atk_time"] = 0.0
+	battle_runtime["enemy_def_mult"] = 1.0
+	battle_runtime["enemy_def_time"] = 0.0
+	battle_runtime["enemy_aps_mult"] = 1.0
+	battle_runtime["enemy_aps_time"] = 0.0
+	battle_runtime["enemy_vuln_mult"] = 1.0
+	battle_runtime["enemy_vuln_time"] = 0.0
+
+func _battle_tick_effects(dt: float) -> void:
+	# Timers down, reset multipliers when expired
+	_tick_timer_reset_mult("player_atk_time", "player_atk_mult", 1.0, dt)
+	_tick_timer_reset_mult("player_def_time", "player_def_mult", 1.0, dt)
+	_tick_timer_reset_mult("player_aps_time", "player_aps_mult", 1.0, dt)
+	_tick_timer_reset_mult("player_avoid_time", "player_avoid_pp_add", 0.0, dt)
+	_tick_timer_reset_mult("player_crit_time", "player_crit_pp_add", 0.0, dt)
+
+	_tick_timer_reset_mult("enemy_atk_time", "enemy_atk_mult", 1.0, dt)
+	_tick_timer_reset_mult("enemy_def_time", "enemy_def_mult", 1.0, dt)
+	_tick_timer_reset_mult("enemy_aps_time", "enemy_aps_mult", 1.0, dt)
+	_tick_timer_reset_mult("enemy_vuln_time", "enemy_vuln_mult", 1.0, dt)
+
+	# Stun
+	if float(battle_runtime.get("enemy_stun_time", 0.0)) > 0.0:
+		battle_runtime["enemy_stun_time"] = max(0.0, float(battle_runtime["enemy_stun_time"]) - dt)
+
+	# Enemy DoT
+	if float(battle_runtime.get("enemy_dot_time", 0.0)) > 0.0:
+		var dps := float(battle_runtime.get("enemy_dot_dps", 0.0))
+		if dps > 0.0:
+			var dealt := dps * dt * _enemy_vuln_mult()
+			battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
+		battle_runtime["enemy_dot_time"] = max(0.0, float(battle_runtime["enemy_dot_time"]) - dt)
+		if float(battle_runtime["enemy_dot_time"]) <= 0.0:
+			battle_runtime["enemy_dot_dps"] = 0.0
+
+	# Player HoT
+	if float(battle_runtime.get("player_hot_time", 0.0)) > 0.0:
+		var hps := float(battle_runtime.get("player_hot_hps", 0.0))
+		if hps > 0.0:
+			_skill_heal(SkillDef.new(), hps * dt, true) # quiet tick
+		battle_runtime["player_hot_time"] = max(0.0, float(battle_runtime["player_hot_time"]) - dt)
+		if float(battle_runtime["player_hot_time"]) <= 0.0:
+			battle_runtime["player_hot_hps"] = 0.0
+
+func _tick_timer_reset_mult(time_key: String, mult_key: String, reset_value: float, dt: float) -> void:
+	var t := float(battle_runtime.get(time_key, 0.0))
+	if t <= 0.0:
+		return
+	t = max(0.0, t - dt)
+	battle_runtime[time_key] = t
+	if t <= 0.0:
+		battle_runtime[mult_key] = reset_value
+
 func _battle_process(delta: float) -> void:
 	if not _battle_inited:
 		return
@@ -408,23 +759,25 @@ func _battle_process(delta: float) -> void:
 		return
 
 	var dt: float = delta * _battle_speed_multiplier()
+
+	# Timed effects + active skills
+	_battle_tick_effects(dt)
+	if float(battle_runtime.get("enemy_hp", 0.0)) <= 0.0:
+		_battle_on_enemy_defeated()
+		return
+	_skills_tick(dt)
 	
 	# Accumulate real-time for aggregation flush
 	_agg_flush_accum += delta
 	if combat_log_compact_effective():
 		_combat_log_flush(false)
-		
-	# Regen tick (scaled by battle speed)
-	if _p_regen > 0.0 and float(battle_runtime.get("player_hp", 0.0)) > 0.0:
-		var nhp: float = float(battle_runtime["player_hp"]) + (_p_regen * dt)
-		battle_runtime["player_hp"] = clamp(nhp, 0.0, _p_hp_max)
 
 
 	_p_atk_accum += dt
 	_e_atk_accum += dt
 
-	var p_interval: float = 1.0 / max(0.1, _p_aps)
-	var e_interval: float = 1.0 / max(0.1, _e_aps)
+	var p_interval: float = 1.0 / max(0.1, _p_aps * _player_aps_mult())
+	var e_interval: float = 1.0 / max(0.1, _e_aps * _enemy_aps_mult())
 
 	while _p_atk_accum >= p_interval:
 		_p_atk_accum -= p_interval
@@ -444,12 +797,14 @@ func _battle_player_attack() -> void:
 	var was_crit: bool = false
 	var hits: int = 1
 
-	var dmg: float = _p_atk
+	var dmg: float = _p_atk * _player_atk_mult()
 
 	# Crit
-	if (RNG as RNGService).randf() < _p_crit:
+	var crit_chance: float = clamp(_p_crit + (float(battle_runtime.get("player_crit_pp_add", 0.0)) / 100.0), 0.0, 0.90)
+
+	if (RNG as RNGService).randf() < crit_chance:
 		was_crit = true
-		dmg *= _p_crit_mult
+		dmg *= 1.5
 
 	# Combo (percent points; allow >100)
 	var cc: float = max(0.0, _p_combo) / 100.0
@@ -462,9 +817,10 @@ func _battle_player_attack() -> void:
 
 	var total: float = dmg
 	if hits > 1:
-		total += (dmg * _p_combo_extra_mult) # extra hits scale with combo dmg
+		total += float(hits - 1) * (dmg * 0.5) # extra hits at 50%
 
-	var dealt: float = _apply_defense(total, _e_def)
+	var dealt: float = _apply_defense(total, _enemy_def_effective())
+	dealt *= _enemy_vuln_mult()
 	battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
 
 	# --- Combat log line ---
@@ -487,11 +843,16 @@ func _battle_player_attack() -> void:
 
 		log_combat("player", sev, "[color=#7CFF7C]You[/color] hit for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
 
+
 func _battle_enemy_attack() -> void:
-	var dmg: float = _e_atk
+	var dmg: float = _e_atk * _enemy_atk_mult()
+
+	# Stun: enemy cannot act
+	if float(battle_runtime.get("enemy_stun_time", 0.0)) > 0.0:
+		return
 
 	# Avoid
-	if (RNG as RNGService).randf() < (clamp(_p_avoid, 0.0, 100.0) / 100.0):
+	if (RNG as RNGService).randf() < (clamp(_p_avoid + float(battle_runtime.get("player_avoid_pp_add", 0.0)), 0.0, 100.0) / 100.0):
 		if combat_log_compact_effective():
 			_agg_enemy_hits["avoids"] = int(_agg_enemy_hits["avoids"]) + 1
 		else:
@@ -503,8 +864,16 @@ func _battle_enemy_attack() -> void:
 		blocked = true
 		dmg *= 0.30
 
-	var dealt: float = _apply_defense(dmg, _p_def)
-	battle_runtime["player_hp"] = max(0.0, float(battle_runtime["player_hp"]) - dealt)
+	var dealt: float = _apply_defense(dmg, _p_def * _player_def_mult())
+	var shield: float = float(battle_runtime.get("player_shield", 0.0))
+	var remaining: float = dealt
+	if shield > 0.0 and remaining > 0.0:
+		var absorbed: float = minf(shield, remaining)
+		shield -= absorbed
+		remaining -= absorbed
+		battle_runtime["player_shield"] = shield
+
+	battle_runtime["player_hp"] = max(0.0, float(battle_runtime["player_hp"]) - remaining)
 
 	var tag_txt: String = ""
 	if blocked:
@@ -520,7 +889,7 @@ func _battle_enemy_attack() -> void:
 		if blocked:
 			tag_txt = " [color=#7FB0FF](BLOCK)[/color]"
 			sev = "block"
-		log_combat("enemy", sev, "[color=#FF8A8A]Enemy[/color] hit you for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
+		log_combat("enemy", sev, "[color=#FF8A8A]Enemy[/color] hit you for [b]%d[/b]%s" % [int(round(remaining)), tag_txt])
 
 func _apply_defense(raw: float, defense: float) -> float:
 	# Diminishing returns: dmg * (100 / (100 + def))
@@ -622,34 +991,64 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 	_e_atk = max(1.0, atk)
 	_e_def = max(0.0, def)
 
+	# Reset per-enemy effects
+	battle_runtime["enemy_stun_time"] = 0.0
+	battle_runtime["enemy_dot_dps"] = 0.0
+	battle_runtime["enemy_dot_time"] = 0.0
+	battle_runtime["enemy_atk_mult"] = 1.0
+	battle_runtime["enemy_atk_time"] = 0.0
+	battle_runtime["enemy_def_mult"] = 1.0
+	battle_runtime["enemy_def_time"] = 0.0
+	battle_runtime["enemy_aps_mult"] = 1.0
+	battle_runtime["enemy_aps_time"] = 0.0
+	battle_runtime["enemy_vuln_mult"] = 1.0
+	battle_runtime["enemy_vuln_time"] = 0.0
+
 	# If you tune enemy attack speed elsewhere, keep your existing logic:
 	# _e_aps = is_boss ? 0.7 : 0.9
 
 func _battle_recompute_player_combat() -> void:
-	# Use the player's full stat pipeline (base class + class node + skills + gear + synergies).
-	_p_stats = player.total_stats()
-	
-	_p_hp_max = max(1.0, float(_p_stats.hp))
-	_p_atk = max(1.0, float(_p_stats.atk))
-	_p_def = max(0.0, float(_p_stats.def))
-	
+	# Base values (tune later)
+	var base_hp: float = 100.0 + float(player.level) * 5.0
+	var base_atk: float = 10.0 + float(player.level) * 1.0
+	var base_def: float = 3.0 + float(player.level) * 0.25
+
+	var hp_add: float = 0.0
+	var atk_add: float = 0.0
+	var def_add: float = 0.0
+	var atk_spd: float = 0.0
+
+	var crit_pp: float = 0.0
+	var combo_pp: float = 0.0
+	var block_pp: float = 0.0
+	var avoid_pp: float = 0.0
+
+	for k in player.equipped.keys():
+		var it: GearItem = player.equipped.get(k, null)
+		if it == null or it.stats == null:
+			continue
+		var s: Stats = it.stats
+		hp_add += float(s.hp)
+		atk_add += float(s.atk)
+		def_add += float(s.def)
+		atk_spd += float(s.atk_spd)
+
+		crit_pp += float(s.crit_chance)
+		combo_pp += float(s.combo_chance)
+		block_pp += float(s.block)
+		avoid_pp += float(s.avoidance)
+
+	_p_hp_max = max(1.0, base_hp + hp_add)
+	_p_atk = max(1.0, base_atk + atk_add)
+	_p_def = max(0.0, base_def + def_add)
+
 	# APS: base 1.0, plus atk_spd (treat as additive percent like 0.05 = +5%)
-	_p_aps = clamp(1.0 * (1.0 + float(_p_stats.atk_spd)), 0.3, 10.0)
-	
-	_p_crit = clamp(float(_p_stats.crit_chance) / 100.0, 0.0, 0.75)
-	_p_combo = max(0.0, float(_p_stats.combo_chance))
-	_p_block = clamp(float(_p_stats.block), 0.0, 75.0)
-	_p_avoid = clamp(float(_p_stats.avoidance), 0.0, 60.0)
-	
-	_p_regen = max(0.0, float(_p_stats.regen))
-	
-	# Crit and combo damage are stored as percent points.
-	# Baselines: crit bonus +50%, combo extra hits deal 50%.
-	_p_crit_mult = 1.0 + 0.5 + (clamp(float(_p_stats.crit_dmg), 0.0, 500.0) / 100.0)
-	_p_combo_extra_mult = 0.5 + (clamp(float(_p_stats.combo_dmg), 0.0, 500.0) / 100.0)
-	
-	# INT reduces skill cooldowns (linear reduction, clamped).
-	_p_skill_cd_mult = _compute_skill_cd_mult(float(_p_stats.int_))
+	_p_aps = clamp(1.0 * (1.0 + atk_spd), 0.3, 10.0)
+
+	_p_crit = clamp(crit_pp / 100.0, 0.0, 0.75)
+	_p_combo = max(0.0, combo_pp)
+	_p_block = clamp(block_pp, 0.0, 75.0)
+	_p_avoid = clamp(avoid_pp, 0.0, 60.0)
 
 func _battle_advance_progression() -> void:
 	var diff: String = String(battle_state.get("difficulty", "Easy"))
@@ -799,116 +1198,6 @@ func _combat_log_flush(force: bool) -> void:
 		log_combat("reward", "reward", "[color=#CFCFCF]Rewards[/color]: +%d gold, +%d keys (%d waves)%s" % [g, k, w, boss_txt])
 
 		_agg_rewards = {"gold": 0, "keys": 0, "waves": 0, "boss_waves": 0}
-
-# ----------------- Skills (MVP) -----------------
-
-func _compute_skill_cd_mult(int_value: float) -> float:
-	# each 1 int reduces cooldown by 1% to a max reduction of 60%
-	return clamp(1.0 - (max(0.0, int_value) * 0.01), 0.40, 1.0)
-
-func _skills_sync_loadout() -> void:
-	if player == null:
-		return
-	player.ensure_class_and_skills_initialized()
-	
-	# Remove cooldown entries that no longer exist
-	var keep := {}
-	for sid in player.equipped_active_skills:
-		keep[String(sid)] = true
-		
-	for k in _skill_cd.keys():
-		if not keep.has(String(k)):
-			_skill_cd.erase(k)
-			
-	# Ensure cooldown entries exist for all equipped skills
-	for sid in player.equipped_active_skills:
-		var id: String = String(sid)
-		if not _skill_cd.has(id):
-			_skill_cd[id] = 0.0
-			
-func _battle_process_skills(dt: float) -> void:
-	if player == null:
-		return
-	if player.equipped_active_skills.is_empty():
-		return
-	if float(battle_runtime.get("enemy_hp", 0.0)) <= 0.0:
-		return
-		
-	# Tick cooldowns and cast ready skills.
-	# Safety cap to avoid huge multi-cast loops at high dt
-	var casts_left: int = 8
-	
-	for sid in player.equipped_active_skills:
-		if casts_left <= 0:
-			break
-		var id: String = String(sid)
-		var sd: SkillDef = SkillCatalog.get_def(id)
-		if sd == null or sd.type != SkillDef.SkillType.ACTIVE:
-			continue
-		
-		var cd_left: float = float(_skill_cd.get(id, 0.0)) - dt
-		_skill_cd[id] = cd_left
-		
-		if cd_left > 0.0:
-			continue
-			
-		# Cast now
-		_battle_cast_skill(sd)
-		
-		# Reset cooldown; if cd_left is negative, carry it forward so long dt doesn't lose time
-		var cd_reset: float = max(0.25, float(sd.base_cooldown) * _p_skill_cd_mult)
-		_skill_cd[id] = cd_reset + cd_left
-		casts_left -= 1
-		
-func _battle_cast_skill(sd: SkillDef) -> void:
-	if sd == null:
-		return
-		
-	var lvl: int = maxi(1, player.get_skill_level(sd.id))
-	
-	# Basic damage formula:
-	# damage = power(level) + scaling_stat * scaling_mult
-	var raw: float = float(sd.power(lvl))
-	raw+= _skill_get_stat_value(sd.scaling_stat) * float(sd.scaling_mult)
-	
-	if sd.target == SkillDef.Target.SELF:
-		# MVP treat SELF skills as heal. (You can add real effect types later)
-		var healed: float = raw
-		battle_runtime["player_hp"] = clamp(float(battle_runtime["player_hp"]) + healed, 0.0, _p_hp_max)
-		log_combat("player", "system", "[color=#7CFF7C]You[/color] cast [b]%s[/b] and healed [b]%d[/b]" % [sd.display_name, int(round(healed))])
-		return
-		
-	# Enemy-targeted skill
-	var was_crit: bool = false
-	var dmg: float = raw
-	if sd.can_crit and (RNG as RNGService).randf() < _p_crit:
-		was_crit = true
-		dmg *= _p_crit_mult
-		
-	var dealt: float = _apply_defense(dmg, _e_def)
-	battle_runtime["enemy_hp"] = max(0.0, float(battle_runtime["enemy_hp"]) - dealt)
-	
-	var sev: String = "normal"
-	if was_crit:
-		sev = "crit"
-	
-	log_combat("player", sev, "[color=#7CFF7C]You[/color] cast [b]%s[/b] for [b]%d[/b]%s" % [
-		sd.display_name,
-		int(round(dealt)),
-		(" [color=#FFD24A](CRIT)[/color]" if was_crit else "")
-	])
-
-func _skill_get_stat_value(stat_name: String) -> float:
-	if _p_stats == null:
-		return 0.0
-	match stat_name:
-		"atk": return float(_p_stats.atk)
-		"str": return float(_p_stats.str)
-		"int": return float(_p_stats.int_)
-		"agi": return float(_p_stats.agi)
-		"def": return float(_p_stats.def)
-		"hp": return float(_p_stats.hp)
-	return 0.0
 
 func _fmt_duration_short(seconds: int) -> String:
 	seconds = maxi(0, seconds)
