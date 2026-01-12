@@ -8,6 +8,10 @@ var _slot_opts: Array[OptionButton] = []
 var _skill_ids: Array[String] = [] # option index -> skill_id (0 reserved for empty)
 var _icon_cache: Dictionary = {}   # skill_id -> Texture2D (scaled)
 
+var _slot_last_selected: Array[int] = []
+var _status_label: Label = null
+
+
 func _ready() -> void:
 	top_level = true
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -48,7 +52,6 @@ func _rarity_name_for_def(def: SkillDef) -> String:
 		3: return "Legendary"
 		4: return "Mythical"
 	return "Common"
-
 
 func _tooltip_for_skill(skill_id: String) -> String:
 	if skill_id == "":
@@ -136,6 +139,13 @@ func _build() -> void:
 	hint.text = "Equip up to 5 active skills. In Auto mode, skills will fire sequentially as they come off cooldown."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(hint)
+	
+	_status_label = Label.new()
+	_status_label.text = ""
+	_status_label.modulate = Color(1.0, 0.7, 0.7, 1.0)
+	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(_status_label)
+
 
 	# Scrollable list so Close never gets pushed off-screen
 	var scroll := ScrollContainer.new()
@@ -155,6 +165,11 @@ func _build() -> void:
 		_skill_ids.append(id)
 
 	_slot_opts.clear()
+	
+	_slot_last_selected = []
+	for _i in range(SLOTS):
+		_slot_last_selected.append(0)
+
 
 	for slot_idx in range(SLOTS):
 		var row := HBoxContainer.new()
@@ -230,6 +245,9 @@ func _refresh_from_player() -> void:
 			idx = 0
 		_slot_opts[i].select(idx)
 		_slot_opts[i].tooltip_text = _tooltip_for_skill(sid)
+		if i < _slot_last_selected.size():
+			_slot_last_selected[i] = idx
+
 
 # index = selected OptionButton item index, slot_idx passed via bind()
 func _on_slot_selected(index: int, slot_idx: int) -> void:
@@ -238,6 +256,15 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	if Game.player.has_method("ensure_active_skills_initialized"):
 		Game.player.call("ensure_active_skills_initialized")
 
+	if _status_label != null:
+		_status_label.text = ""
+
+	# Determine the requested skill id
+	var sid: String = ""
+	if index >= 0 and index < _skill_ids.size():
+		sid = _skill_ids[index]
+
+	# Read current equipped array
 	var eq: Array = []
 	var eqv: Variant = Game.player.get("equipped_active_skills")
 	if typeof(eqv) == TYPE_ARRAY:
@@ -246,10 +273,31 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	while eq.size() < SLOTS:
 		eq.append("")
 
-	var sid: String = ""
-	if index >= 0 and index < _skill_ids.size():
-		sid = _skill_ids[index]
+	# Enforce uniqueness (ignore empty)
+	if sid != "":
+		for i in range(SLOTS):
+			if i == slot_idx:
+				continue
+			if String(eq[i]) == sid:
+				# Duplicate detected: revert UI selection to previous and show message
+				if _status_label != null:
+					var def := SkillCatalog.get_def(sid)
+					var nm := def.display_name if def != null else sid
+					_status_label.text = "You can only equip one copy of %s." % nm
 
+				var prev := 0
+				if slot_idx >= 0 and slot_idx < _slot_last_selected.size():
+					prev = _slot_last_selected[slot_idx]
+				# Revert without triggering recursion
+				var opt := _slot_opts[slot_idx]
+				if opt != null:
+					opt.set_block_signals(true)
+					opt.select(prev)
+					opt.set_block_signals(false)
+
+				return
+
+	# Apply selection
 	eq[slot_idx] = sid
 	Game.player.set("equipped_active_skills", eq)
 
@@ -257,9 +305,12 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	if slot_idx >= 0 and slot_idx < _slot_opts.size():
 		_slot_opts[slot_idx].tooltip_text = _tooltip_for_skill(sid)
 
+	# Remember last valid selection
+	if slot_idx >= 0 and slot_idx < _slot_last_selected.size():
+		_slot_last_selected[slot_idx] = index
+
 	SaveManager.save_now()
 	Game.player_changed.emit()
-
 
 func _center_panel() -> void:
 	var panel := get_node_or_null("MainPanel") as Control
