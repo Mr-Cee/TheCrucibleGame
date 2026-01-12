@@ -6,12 +6,17 @@ class_name SkillCatalog
 
 static var _defs: Dictionary = {} # id -> SkillDef
 
+
+
+
 static func _add_def(id: String, name: String, desc: String, cd: float, effect: SkillDef.EffectType,
 		power: float, hits: int = 1, duration: float = 0.0, magnitude: float = 0.0, secondary_power: float = 0.0) -> void:
 	var d := SkillDef.new()
 	d.id = id
 	d.display_name = name
 	d.description = desc
+	d.rarity = RARITY_BY_ID.get(id, SkillDef.SkillRarity.COMMON)
+	d.icon_path = "res://assets/icons/skills/%s.png" % id
 	d.cooldown = cd
 	d.effect = effect
 	d.power = power
@@ -20,6 +25,57 @@ static func _add_def(id: String, name: String, desc: String, cd: float, effect: 
 	d.magnitude = magnitude
 	d.secondary_power = secondary_power
 	_defs[id] = d
+
+const RARITY_BY_ID := {
+	# ------------------------
+	# Common (simple baseline)
+	# ------------------------
+	"arcane_bolt": SkillDef.SkillRarity.COMMON,
+	"power_strike": SkillDef.SkillRarity.COMMON,
+	"rapid_shot": SkillDef.SkillRarity.COMMON,
+	"piercing_arrow": SkillDef.SkillRarity.COMMON,
+	"healing_surge": SkillDef.SkillRarity.COMMON,
+	"barrier": SkillDef.SkillRarity.COMMON,
+	"battle_cry": SkillDef.SkillRarity.COMMON,
+	"iron_skin": SkillDef.SkillRarity.COMMON,
+	"frost_lance": SkillDef.SkillRarity.COMMON,
+	"poisoned_blade": SkillDef.SkillRarity.COMMON,
+
+	# ------------------------
+	# Uncommon (multi-hit / stronger utility)
+	# ------------------------
+	"whirlwind": SkillDef.SkillRarity.UNCOMMON,
+	"flame_wave": SkillDef.SkillRarity.UNCOMMON,
+	"rejuvenation": SkillDef.SkillRarity.UNCOMMON,
+	"guardian_wall": SkillDef.SkillRarity.UNCOMMON,
+	"marked_prey": SkillDef.SkillRarity.UNCOMMON,
+	"shatter_armor": SkillDef.SkillRarity.UNCOMMON,
+	"adrenaline_rush": SkillDef.SkillRarity.UNCOMMON,
+	"smoke_bomb": SkillDef.SkillRarity.UNCOMMON,
+
+	# ------------------------
+	# Rare (meaningful CC / debuff / sustain)
+	# ------------------------
+	"meteor_fragment": SkillDef.SkillRarity.RARE,
+	"thunderclap": SkillDef.SkillRarity.RARE,
+	"concussive_shot": SkillDef.SkillRarity.RARE,
+	"hex_of_frailty": SkillDef.SkillRarity.RARE,
+	"life_drain": SkillDef.SkillRarity.RARE,
+	"deadly_focus": SkillDef.SkillRarity.RARE,
+	"crippling_blow": SkillDef.SkillRarity.RARE,
+
+	# ------------------------
+	# Legendary (very strong effects / multi-value)
+	# ------------------------
+	"shadow_bleed": SkillDef.SkillRarity.LEGENDARY,
+	"time_snare": SkillDef.SkillRarity.LEGENDARY,
+	"second_wind": SkillDef.SkillRarity.LEGENDARY,
+
+	# ------------------------
+	# Mythical (game-changing utility)
+	# ------------------------
+	"arcane_overload": SkillDef.SkillRarity.MYTHICAL,
+}
 
 static func _ensure_built() -> void:
 	if _defs.size() > 0:

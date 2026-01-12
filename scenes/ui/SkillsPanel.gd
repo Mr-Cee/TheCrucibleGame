@@ -1,50 +1,129 @@
 extends Control
 class_name SkillsPanel
 
-# Simple skills management screen:
-# - Choose 5 active skills to equip for battle.
-# - Uses OptionButtons (drop-downs) for now (can be reskinned later).
-
 const SLOTS: int = 5
+const ICON_SIZE: int = 48
 
 var _slot_opts: Array[OptionButton] = []
-var _skill_ids: Array[String] = [] # option index -> skill_id (index 0 reserved for empty)
+var _skill_ids: Array[String] = [] # option index -> skill_id (0 reserved for empty)
+var _icon_cache: Dictionary = {}   # skill_id -> Texture2D (scaled)
 
 func _ready() -> void:
-	_build()
-
-func _build() -> void:
-	# Overlay
-	anchor_left = 0
-	anchor_top = 0
-	anchor_right = 1
-	anchor_bottom = 1
+	top_level = true
+	set_anchors_preset(Control.PRESET_FULL_RECT)
 	offset_left = 0
 	offset_top = 0
 	offset_right = 0
 	offset_bottom = 0
 
+	_build()
+	# Defer centering until controls have a real size.
+	call_deferred("_center_panel")
+
+
+# ---------------- Tooltip helpers ----------------
+
+func _player_skill_level(skill_id: String) -> int:
+	if Game.player == null:
+		return 1
+	var lv: int = 1
+	if "skill_levels" in Game.player:
+		var d: Dictionary = Game.player.get("skill_levels")
+		lv = int(d.get(skill_id, 1))
+	return lv
+
+func _rarity_name_for_def(def: SkillDef) -> String:
+	if def == null:
+		return "Common"
+
+	# If rarity hasn't been implemented yet, default safely.
+	if not ("rarity" in def):
+		return "Common"
+
+	var r: int = int(def.get("rarity"))
+	match r:
+		0: return "Common"
+		1: return "Uncommon"
+		2: return "Rare"
+		3: return "Legendary"
+		4: return "Mythical"
+	return "Common"
+
+
+func _tooltip_for_skill(skill_id: String) -> String:
+	if skill_id == "":
+		return "Empty slot."
+	var def: SkillDef = SkillCatalog.get_def(skill_id)
+	if def == null:
+		return skill_id
+
+	var lv: int = _player_skill_level(skill_id)
+	var rar: String = _rarity_name_for_def(def)
+	var cd: String = "%.1fs" % float(def.cooldown)
+
+	return "%s\nRarity: %s\nLevel: %d\nCooldown: %s\n\n%s" % [
+		def.display_name, rar, lv, cd, def.description
+	]
+
+# ---------------- Icon helpers ----------------
+
+func _scaled_icon_for_skill_id(sid: String) -> Texture2D:
+	if sid == "":
+		return null
+	if _icon_cache.has(sid):
+		return _icon_cache[sid]
+
+	var tex: Texture2D = null
+	var d := SkillCatalog.get_def(sid)
+	if d != null and d.has_method("icon_texture"):
+		tex = d.icon_texture()
+
+	# Fallback by convention
+	if tex == null:
+		var p := "res://assets/icons/skills/%s.png" % sid
+		if ResourceLoader.exists(p):
+			tex = load(p) as Texture2D
+
+	if tex == null:
+		_icon_cache[sid] = null
+		return null
+
+	var img := tex.get_image()
+	if img == null:
+		_icon_cache[sid] = tex
+		return tex
+
+	img.resize(ICON_SIZE, ICON_SIZE, Image.INTERPOLATE_LANCZOS)
+	var out := ImageTexture.create_from_image(img)
+	_icon_cache[sid] = out
+	return out
+
+# ---------------- UI ----------------
+
+func _build() -> void:
+	# Fullscreen overlay
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+
 	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.color = Color(0, 0, 0, 0.55)
-	dim.anchor_left = 0
-	dim.anchor_top = 0
-	dim.anchor_right = 1
-	dim.anchor_bottom = 1
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 
 	var panel := PanelContainer.new()
-	panel.anchor_left = 0.5
-	panel.anchor_top = 0.5
-	panel.anchor_right = 0.5
-	panel.anchor_bottom = 0.5
-	panel.offset_left = -320
-	panel.offset_top = -240
-	panel.offset_right = 320
-	panel.offset_bottom = 240
+	panel.name = "MainPanel"
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.custom_minimum_size = Vector2(640, 480) # same as your -320..320 and -240..240
 	add_child(panel)
+
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 10)
+	root.offset_left = 10
+	root.offset_right = -10
+	root.offset_top = 10
+	root.offset_bottom = -10
 	panel.add_child(root)
 
 	var title := Label.new()
@@ -58,49 +137,72 @@ func _build() -> void:
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(hint)
 
+	# Scrollable list so Close never gets pushed off-screen
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(scroll)
+
 	var grid := VBoxContainer.new()
 	grid.add_theme_constant_override("separation", 8)
-	root.add_child(grid)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(grid)
 
 	# Build options list once
 	_skill_ids = [""]
-	var all := SkillCatalog.all_active_ids()
+	var all: Array[String] = SkillCatalog.all_active_ids()
 	for id in all:
 		_skill_ids.append(id)
 
 	_slot_opts.clear()
 
-	for i in range(SLOTS):
+	for slot_idx in range(SLOTS):
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
+		row.add_theme_constant_override("separation", 10)
 		grid.add_child(row)
 
 		var lbl := Label.new()
-		lbl.text = "Slot %d" % (i + 1)
+		lbl.text = "Slot %d" % (slot_idx + 1)
 		lbl.custom_minimum_size = Vector2(70, 0)
 		row.add_child(lbl)
 
 		var opt := OptionButton.new()
 		opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		opt.custom_minimum_size = Vector2(0, ICON_SIZE + 12)
+		opt.tooltip_text = "Empty slot."
 		row.add_child(opt)
 		_slot_opts.append(opt)
 
+		# Build items + icons + item tooltips
 		opt.add_item("(Empty)", 0)
+		var popup := opt.get_popup()
+		popup.set_item_tooltip(0, _tooltip_for_skill(""))
+
 		for idx in range(1, _skill_ids.size()):
 			var sid := _skill_ids[idx]
-			var d := SkillCatalog.get_def(sid)
-			opt.add_item(d.display_name if d != null else sid, idx)
+			var def := SkillCatalog.get_def(sid)
+			opt.add_item(def.display_name if def != null else sid, idx)
 
-		opt.item_selected.connect(_on_slot_selected.bind(i))
+			var icon := _scaled_icon_for_skill_id(sid)
+			if icon != null:
+				opt.set_item_icon(opt.item_count - 1, icon)
 
-	# Load current selections
+			popup.set_item_tooltip(opt.item_count - 1, _tooltip_for_skill(sid))
+
+		# Signal is item_selected(index:int)
+		opt.item_selected.connect(_on_slot_selected.bind(slot_idx))
+
+	# Apply current equipped skills into UI
 	_refresh_from_player()
 
+	# Footer
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 10)
 	root.add_child(footer)
 
-	footer.add_spacer(1)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(spacer)
 
 	var close := Button.new()
 	close.text = "Close"
@@ -113,38 +215,60 @@ func _refresh_from_player() -> void:
 	if Game.player.has_method("ensure_active_skills_initialized"):
 		Game.player.call("ensure_active_skills_initialized")
 
-	var eq: Array = Game.player.get("equipped_active_skills")
-	if eq == null:
-		return
+	var eq: Array = []
+	var eqv: Variant = Game.player.get("equipped_active_skills")
+	if typeof(eqv) == TYPE_ARRAY:
+		eq = eqv as Array
+
+	while eq.size() < SLOTS:
+		eq.append("")
 
 	for i in range(SLOTS):
-		var sid := ""
-		if i < eq.size():
-			sid = String(eq[i])
-
+		var sid := String(eq[i]) if i < eq.size() else ""
 		var idx := _skill_ids.find(sid)
 		if idx < 0:
 			idx = 0
 		_slot_opts[i].select(idx)
+		_slot_opts[i].tooltip_text = _tooltip_for_skill(sid)
 
-func _on_slot_selected(option_idx: int, slot: int) -> void:
+# index = selected OptionButton item index, slot_idx passed via bind()
+func _on_slot_selected(index: int, slot_idx: int) -> void:
 	if Game.player == null:
 		return
 	if Game.player.has_method("ensure_active_skills_initialized"):
 		Game.player.call("ensure_active_skills_initialized")
 
-	var eq: Array = Game.player.get("equipped_active_skills")
-	if eq == null:
-		return
+	var eq: Array = []
+	var eqv: Variant = Game.player.get("equipped_active_skills")
+	if typeof(eqv) == TYPE_ARRAY:
+		eq = eqv as Array
 
-	var sid := ""
-	if option_idx >= 0 and option_idx < _skill_ids.size():
-		sid = _skill_ids[option_idx]
-
-	# Ensure array size
 	while eq.size() < SLOTS:
 		eq.append("")
 
-	eq[slot] = sid
+	var sid: String = ""
+	if index >= 0 and index < _skill_ids.size():
+		sid = _skill_ids[index]
+
+	eq[slot_idx] = sid
 	Game.player.set("equipped_active_skills", eq)
+
+	# Update slot tooltip immediately
+	if slot_idx >= 0 and slot_idx < _slot_opts.size():
+		_slot_opts[slot_idx].tooltip_text = _tooltip_for_skill(sid)
+
+	SaveManager.save_now()
 	Game.player_changed.emit()
+
+
+func _center_panel() -> void:
+	var panel := get_node_or_null("MainPanel") as Control
+	if panel == null:
+		return
+
+	# Force it to its minimum size; keeps it consistent across resolutions.
+	panel.size = panel.custom_minimum_size
+
+	# Center in viewport (top_level ensures viewport coords).
+	var vp := get_viewport_rect().size
+	panel.position = (vp - panel.size) * 0.5

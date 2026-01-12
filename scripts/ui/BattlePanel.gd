@@ -12,8 +12,20 @@ extends VBoxContainer
 @onready var compact_toggle: CheckButton = get_node_or_null("LogControls/CompactToggle") as CheckButton
 @onready var clear_log_button: Button = get_node_or_null("LogControls/ClearLogButton") as Button
 
-var _log_filter_mode: String = "all" # all/player/enemy/reward/system
+# --- Skills row (matches your scene tree) ---
+@onready var skills_row: HBoxContainer = get_node_or_null("SkillsRow") as HBoxContainer
+@onready var auto_skills_toggle: CheckButton = get_node_or_null("SkillsRow/AutoSkillsToggle") as CheckButton
 
+const SKILL_SLOTS: int = 5
+const SKILL_ICON_SIZE: int = 36
+
+var _skill_icon_buttons: Array[Button] = []
+var _skill_cd_labels: Array[Label] = []
+var _skill_mode_label: Label = null
+var _skill_icon_cache: Dictionary = {} # skill_id -> scaled Texture2D
+
+# Combat log state
+var _log_filter_mode: String = "all" # all/player/enemy/reward/system
 var _log_buf: String = ""
 var _log_pinned_to_bottom: bool = true
 var _log_programmatic_scroll: bool = false
@@ -23,26 +35,21 @@ var _ui_accum: float = 0.0
 
 func _ready() -> void:
 	_apply_labels()
-	
-	# --------------------------------------------------
+	_ensure_skills_row_ui()
+
 	# --- Combat log setup ---
 	combat_log.bbcode_enabled = true
 
 	if _log_buf != "" and not _log_buf.ends_with("\n"):
 		_log_buf += "\n"
-	
+
 	# Track whether user has scrolled up (unpinned) or is at bottom (pinned)
 	if combat_log_scroll:
 		var bar := combat_log_scroll.get_v_scroll_bar()
 		if bar and not bar.value_changed.is_connected(_on_log_scroll_value_changed):
 			bar.value_changed.connect(_on_log_scroll_value_changed)
 
-	# On first open, assume pinned and snap to bottom
-	_log_pinned_to_bottom = true
-	_scroll_log_to_bottom()
-
-	
-	# Controls (if present)
+	# Controls
 	if log_filter:
 		log_filter.clear()
 		log_filter.add_item("All", 0)
@@ -60,7 +67,6 @@ func _ready() -> void:
 			_log_pinned_to_bottom = true
 			_rebuild_log_from_game()
 			_request_scroll_bottom()
-
 		)
 
 	if compact_toggle:
@@ -74,30 +80,22 @@ func _ready() -> void:
 			Game.clear_combat_log()
 		)
 
-	# Listen to new structured signal (preferred)
-	if Game.combat_log_entry_added.is_connected(_on_combat_log_entry_added) == false:
+	# Signals
+	if not Game.combat_log_entry_added.is_connected(_on_combat_log_entry_added):
 		Game.combat_log_entry_added.connect(_on_combat_log_entry_added)
 
-	Game.combat_log_cleared.connect(func() -> void:
-		_log_pinned_to_bottom = true
-		_log_buf = ""
-		_render_log_text()
-		_scroll_log_to_bottom()
-	)
-	
+	if not Game.combat_log_cleared.is_connected(_on_combat_log_cleared):
+		Game.combat_log_cleared.connect(_on_combat_log_cleared)
+
 	_rebuild_log_from_game()
 	_scroll_log_to_bottom()
-
-
-
-	# --------------------------------------------------
 
 func _process(delta: float) -> void:
 	_ui_accum += delta
 	if _ui_accum < 0.10:
 		return
 	_ui_accum = 0.0
-	
+
 	if result_label:
 		var s: String = String(Game.battle_runtime.get("status_text", ""))
 		result_label.text = s
@@ -105,6 +103,7 @@ func _process(delta: float) -> void:
 
 	_apply_labels()
 	_apply_enemy_hp()
+	_apply_skill_row()
 
 func _apply_labels() -> void:
 	var diff: String = String(Game.battle_state.get("difficulty", "Easy"))
@@ -123,24 +122,189 @@ func _apply_enemy_hp() -> void:
 	enemy_hp_bar.max_value = 100.0
 	enemy_hp_bar.value = (hp / hp_max) * 100.0
 
+# ---------------- Skill row ----------------
+
+func _scaled_skill_icon(skill_id: String) -> Texture2D:
+	if skill_id == "":
+		return null
+	if _skill_icon_cache.has(skill_id):
+		return _skill_icon_cache[skill_id]
+
+	# Prefer catalog/def icon, but fallback to convention path.
+	var tex: Texture2D = null
+	var d := SkillCatalog.get_def(skill_id)
+	if d != null and d.has_method("icon_texture"):
+		tex = d.icon_texture()
+	if tex == null:
+		var p := "res://assets/icons/skills/%s.png" % skill_id
+		if ResourceLoader.exists(p):
+			tex = load(p) as Texture2D
+
+	if tex == null:
+		_skill_icon_cache[skill_id] = null
+		return null
+
+	var img := tex.get_image()
+	if img == null:
+		_skill_icon_cache[skill_id] = tex
+		return tex
+
+	img.resize(SKILL_ICON_SIZE, SKILL_ICON_SIZE, Image.INTERPOLATE_LANCZOS)
+	var out := ImageTexture.create_from_image(img)
+	_skill_icon_cache[skill_id] = out
+	return out
+
+func _ensure_skills_row_ui() -> void:
+	if skills_row == null:
+		return
+
+	# Ensure a left label exists
+	if skills_row.get_node_or_null("SkillsLabel") == null:
+		var skills_lbl := Label.new()
+		skills_lbl.name = "SkillsLabel"
+		skills_lbl.text = "Skills"
+		skills_lbl.custom_minimum_size = Vector2(52, 0)
+		skills_row.add_child(skills_lbl)
+		skills_row.move_child(skills_lbl, 0)
+
+	# Create a strip for the 5 slots
+	var btn_strip := skills_row.get_node_or_null("SkillButtons") as HBoxContainer
+	if btn_strip == null:
+		btn_strip = HBoxContainer.new()
+		btn_strip.name = "SkillButtons"
+		btn_strip.add_theme_constant_override("separation", 8)
+		btn_strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		skills_row.add_child(btn_strip)
+		var idx := skills_row.get_node("SkillsLabel").get_index() + 1
+		skills_row.move_child(btn_strip, idx)
+
+	# Create buttons + cooldown labels (under icon)
+	if _skill_icon_buttons.is_empty():
+		for i in range(SKILL_SLOTS):
+			var slot_box := VBoxContainer.new()
+			slot_box.add_theme_constant_override("separation", 2)
+			btn_strip.add_child(slot_box)
+
+			var b := Button.new()
+			b.custom_minimum_size = Vector2(SKILL_ICON_SIZE + 18, SKILL_ICON_SIZE + 18)
+			b.expand_icon = true
+			b.text = ""
+			b.disabled = true
+			b.pressed.connect(func() -> void:
+				if Game != null and Game.has_method("request_cast_active_skill"):
+					Game.request_cast_active_skill(i)
+			)
+			slot_box.add_child(b)
+			_skill_icon_buttons.append(b)
+
+			var cd := Label.new()
+			cd.text = ""
+			cd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			cd.modulate = Color(0.9, 0.9, 0.9, 1.0)
+			slot_box.add_child(cd)
+			_skill_cd_labels.append(cd)
+
+	# Spacer to push toggle to the right
+	if skills_row.get_node_or_null("SkillSpacer") == null:
+		var spacer := Control.new()
+		spacer.name = "SkillSpacer"
+		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		skills_row.add_child(spacer)
+
+	# Label explaining toggle
+	_skill_mode_label = skills_row.get_node_or_null("SkillModeLabel") as Label
+	if _skill_mode_label == null:
+		_skill_mode_label = Label.new()
+		_skill_mode_label.name = "SkillModeLabel"
+		_skill_mode_label.text = "Skill Cast:"
+		skills_row.add_child(_skill_mode_label)
+
+	# Ensure toggle exists and is rightmost
+	if auto_skills_toggle != null:
+		skills_row.move_child(auto_skills_toggle, skills_row.get_child_count() - 2)
+		skills_row.move_child(_skill_mode_label, auto_skills_toggle.get_index())
+
+		auto_skills_toggle.toggled.connect(func(v: bool) -> void:
+			auto_skills_toggle.text = "Auto" if v else "Manual"
+			if Game != null and Game.has_method("set_skills_auto_enabled"):
+				Game.set_skills_auto_enabled(v)
+			if Game != null and Game.player != null and ("skill_auto" in Game.player):
+				Game.player.set("skill_auto", v)
+		)
+
+func _apply_skill_row() -> void:
+	if skills_row == null or _skill_icon_buttons.is_empty():
+		return
+	if Game == null or Game.player == null:
+		return
+
+	# Determine auto/manual (for enabling manual clicks)
+	var auto_on := true
+	if Game.has_method("skills_auto_enabled"):
+		auto_on = bool(Game.skills_auto_enabled())
+	elif "skill_auto" in Game.player:
+		auto_on = bool(Game.player.get("skill_auto"))
+
+	if auto_skills_toggle != null:
+		auto_skills_toggle.button_pressed = auto_on
+		auto_skills_toggle.text = "Auto" if auto_on else "Manual"
+
+	# Read equipped skills directly from PlayerModel (most reliable)
+	var eq := Game.player.equipped_active_skills
+
+	for i in range(SKILL_SLOTS):
+		var sid: String = ""
+		if eq != null and i < eq.size():
+			sid = String(eq[i])
+
+		var btn := _skill_icon_buttons[i]
+		var cd_lbl := _skill_cd_labels[i]
+
+		if sid == "":
+			btn.icon = null
+			btn.disabled = true
+			btn.tooltip_text = ""
+			cd_lbl.text = ""
+			continue
+
+		var d := SkillCatalog.get_def(sid)
+		btn.icon = _scaled_skill_icon(sid)
+		btn.tooltip_text = (d.display_name + "\n" + d.description) if d != null else sid
+
+		var rem: float = 0.0
+		if Game.has_method("get_skill_cooldown_remaining"):
+			rem = float(Game.get_skill_cooldown_remaining(i))
+
+		if rem > 0.0:
+			btn.disabled = true
+			cd_lbl.text = "%.1f" % rem
+		else:
+			btn.disabled = auto_on
+			cd_lbl.text = ""
+
+# ---------------- Combat log ----------------
+
 func _on_combat_log_entry_added(_entry: Dictionary) -> void:
 	var was_pinned: bool = _log_pinned_to_bottom
 	_rebuild_log_from_game()
 	if was_pinned:
 		_request_scroll_bottom()
 
+func _on_combat_log_cleared() -> void:
+	_log_pinned_to_bottom = true
+	_log_buf = ""
+	_render_log_text()
+	_scroll_log_to_bottom()
+
 func _scroll_log_to_bottom() -> void:
 	if combat_log_scroll == null:
 		return
-
 	_log_programmatic_scroll = true
 	combat_log_scroll.scroll_vertical = 1_000_000_000
-	
 	_log_pinned_to_bottom = true
 	call_deferred("_end_programmatic_scroll")
 
 func _request_scroll_bottom() -> void:
-	# Defer twice so the ScrollContainer updates after text/layout changes.
 	call_deferred("_scroll_bottom_pass1")
 
 func _scroll_bottom_pass1() -> void:
@@ -149,9 +313,7 @@ func _scroll_bottom_pass1() -> void:
 func _scroll_bottom_pass2() -> void:
 	if combat_log_scroll == null:
 		return
-
 	_log_programmatic_scroll = true
-	# ScrollContainer clamps, so a huge number reliably lands at bottom
 	combat_log_scroll.scroll_vertical = 1_000_000_000
 	_log_pinned_to_bottom = true
 	call_deferred("_end_programmatic_scroll")
@@ -162,7 +324,6 @@ func _end_programmatic_scroll() -> void:
 func _rebuild_log_from_game() -> void:
 	var entries: Array[Dictionary] = Game.get_combat_log_entries()
 	var lines: Array[String] = []
-
 	for e in entries:
 		var cat: String = String(e.get("cat", "system"))
 		if _log_filter_mode != "all" and cat != _log_filter_mode:
@@ -182,13 +343,11 @@ func _render_log_text() -> void:
 	combat_log.bbcode_enabled = true
 	combat_log.add_theme_color_override("default_color", Color(1, 1, 1, 1))
 	combat_log.set("scroll_active", false)
-
 	combat_log.clear()
 
 	if combat_log.has_method("parse_bbcode"):
 		combat_log.call("parse_bbcode", _log_buf)
 	else:
-		# Fallback: assign plain text
 		combat_log.text = _log_buf
 
 func _on_log_scroll_value_changed(_v: float) -> void:
@@ -198,9 +357,8 @@ func _on_log_scroll_value_changed(_v: float) -> void:
 	if bar == null:
 		return
 
-	# In Godot, bottom is (max_value - page), not max_value.
+	# Bottom is (max_value - page), not max_value.
 	var page: float = float(bar.page)
 	var bottom: float = max(0.0, float(bar.max_value) - page)
-
-	var threshold: float = max(LOG_PIN_THRESHOLD_PX, float(bar.page) * 0.05) # 5% of viewport
+	var threshold: float = max(LOG_PIN_THRESHOLD_PX, float(bar.page) * 0.05)
 	_log_pinned_to_bottom = (float(bar.value) >= (bottom - threshold))

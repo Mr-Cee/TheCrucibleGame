@@ -31,8 +31,21 @@ enum EffectType {
 
 @export var id: String = ""
 @export var display_name: String = ""
-@export var description: String = ""
+enum SkillRarity { COMMON, UNCOMMON, RARE, LEGENDARY, MYTHICAL }
+@export var rarity: SkillRarity = SkillRarity.COMMON
 
+static func rarity_name(r: SkillRarity) -> String:
+	match r:
+		SkillRarity.COMMON: return "Common"
+		SkillRarity.UNCOMMON: return "Uncommon"
+		SkillRarity.RARE: return "Rare"
+		SkillRarity.LEGENDARY: return "Legendary"
+		SkillRarity.MYTHICAL: return "Mythical"
+	return "Common"
+
+@export var description: String = ""
+@export var icon_path: String = "" # e.g. "res://assets/icons/skills/arcane_bolt.png"
+var _icon_cache: Texture2D = null
 @export var cooldown: float = 12.0 # seconds (before INT reduction)
 @export var effect: EffectType = EffectType.DAMAGE
 
@@ -59,6 +72,7 @@ enum EffectType {
 # - HOT: HPS percent vs player max HP
 @export var secondary_power: float = 0.0
 
+# =================================================================================================
 func level_multiplier(skill_level: int) -> float:
 	# Simple scaling: +15% per level above 1.
 	return 1.0 + 0.15 * float(maxi(0, skill_level - 1))
@@ -68,3 +82,13 @@ func effective_cooldown(int_stat: float) -> float:
 	# This gives up to 30% cooldown reduction at high INT.
 	var cdr: float = clampf(float(int_stat) * 0.001, 0.0, 0.30)
 	return cooldown * (1.0 - cdr)
+
+func icon_texture() -> Texture2D:
+	# Lazy load anc cache the icon texture
+	if _icon_cache != null:
+		return _icon_cache
+	if icon_path == "":
+		return null
+	if ResourceLoader.exists(icon_path):
+		_icon_cache = load(icon_path) as Texture2D
+	return _icon_cache

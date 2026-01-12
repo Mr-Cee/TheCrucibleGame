@@ -149,21 +149,6 @@ layout_mode = 2
 [node name="AutoSkillsToggle" type="CheckButton" parent="RootMargin/RootVBox/BattleSection/SkillsRow"]
 layout_mode = 2
 
-[node name="SkillBtn1" type="Button" parent="RootMargin/RootVBox/BattleSection/SkillsRow"]
-layout_mode = 2
-
-[node name="SkillBtn2" type="Button" parent="RootMargin/RootVBox/BattleSection/SkillsRow"]
-layout_mode = 2
-
-[node name="SkillBtn3" type="Button" parent="RootMargin/RootVBox/BattleSection/SkillsRow"]
-layout_mode = 2
-
-[node name="SkillBtn4" type="Button" parent="RootMargin/RootVBox/BattleSection/SkillsRow"]
-layout_mode = 2
-
-[node name="SkillBtn5" type="Button" parent="RootMargin/RootVBox/BattleSection/SkillsRow"]
-layout_mode = 2
-
 [node name="CrucibleRow" type="HBoxContainer" parent="RootMargin/RootVBox"]
 layout_mode = 2
 

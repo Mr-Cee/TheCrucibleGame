@@ -167,12 +167,6 @@ func _ready() -> void:
 		Game.set_skills_auto_enabled(v)
 	)
 
-	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn1.pressed.connect(func(): Game.request_cast_active_skill(0))
-	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn2.pressed.connect(func(): Game.request_cast_active_skill(1))
-	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn3.pressed.connect(func(): Game.request_cast_active_skill(2))
-	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn4.pressed.connect(func(): Game.request_cast_active_skill(3))
-	$RootMargin/RootVBox/BattleSection/SkillsRow/SkillBtn5.pressed.connect(func(): Game.request_cast_active_skill(4))
-
 
 	if cp_label:
 		cp_label.gui_input.connect(_on_cp_label_gui_input)
