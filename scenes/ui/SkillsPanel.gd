@@ -24,7 +24,6 @@ func _ready() -> void:
 	# Defer centering until controls have a real size.
 	call_deferred("_center_panel")
 
-
 # ---------------- Tooltip helpers ----------------
 
 func _player_skill_level(skill_id: String) -> int:
@@ -159,10 +158,11 @@ func _build() -> void:
 	scroll.add_child(grid)
 
 	# Build options list once
-	_skill_ids = [""]
 	var all: Array[String] = SkillCatalog.all_active_ids()
+	all.sort_custom(Callable(self, "_skill_less"))
 	for id in all:
 		_skill_ids.append(id)
+
 
 	_slot_opts.clear()
 	
@@ -323,3 +323,30 @@ func _center_panel() -> void:
 	# Center in viewport (top_level ensures viewport coords).
 	var vp := get_viewport_rect().size
 	panel.position = (vp - panel.size) * 0.5
+
+
+func _rarity_rank(skill_id: String) -> int:
+	var def: SkillDef = SkillCatalog.get_def(skill_id)
+	if def == null:
+		return 0
+	if not ("rarity" in def):
+		return 0
+	return int(def.get("rarity"))
+
+func _display_name_for(skill_id: String) -> String:
+	var def: SkillDef = SkillCatalog.get_def(skill_id)
+	if def == null:
+		return skill_id
+	return String(def.display_name)
+
+func _skill_less(a: String, b: String) -> bool:
+	var ra := _rarity_rank(a)
+	var rb := _rarity_rank(b)
+	if ra != rb:
+		return ra < rb # Common -> Mythical
+	var na := _display_name_for(a).to_lower()
+	var nb := _display_name_for(b).to_lower()
+	if na != nb:
+		return na < nb
+	# final tie-breaker
+	return a < b
