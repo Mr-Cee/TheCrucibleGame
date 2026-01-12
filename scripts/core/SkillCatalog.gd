@@ -233,11 +233,11 @@ static func all_active_ids() -> Array[String]:
 static func starter_loadout() -> Array[String]:
 	# Pick 5 universal skills that cover damage/CC/heal/shield/utility.
 	return [
-		"arcane_bolt",
-		"thunderclap",
-		"healing_surge",
-		"barrier",
-		"marked_prey"
+		"",
+		"",
+		"",
+		"",
+		""
 	]
 
 ######========= BACKWARDS COMPATIBILITY CODE++++++++++###############

@@ -51,6 +51,7 @@ const ACTIVE_SKILL_SLOTS: int = 5
 @export var equipped_active_skills: Array[String] = []  # length 5
 @export var equipped_passive_skills: Array[String] = []     #list of skill_ids(passive)
 @export var skill_levels: Dictionary = {}               # skill_id -> level (int)
+@export var skill_progress: Dictionary = {}              # skill_id -> int copies toward next level
 
 # Crucible upgrade persistence
 var crucible_upgrade_paid_stages: int = 0
@@ -140,6 +141,7 @@ func to_dict() -> Dictionary:
 		"class_id": class_id,
 		"class_def_id": class_def_id,
 		"skill_levels": skill_levels,
+		"skill_progress": skill_progress,
 		"equipped_active_skills": equipped_active_skills,
 		"equipped_passive_skills": equipped_passive_skills,
 		"skill_auto": skill_auto,
@@ -157,7 +159,7 @@ func to_dict() -> Dictionary:
 		#Unlocks
 		"premium_offline_unlocked": premium_offline_unlocked,
 		"battlepass_expires_unix": battlepass_expires_unix,
-
+		
 
 	}
 
@@ -174,19 +176,25 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.class_def_id = String(d.get("class_def_id", ""))
 	
 	p.skill_auto = bool(d.get("skill_auto", true))
-	p.equipped_active_skills = []
-	var eas_v: Variant = d.get("equipped_active_skills", [])
-	if typeof(eas_v) == TYPE_ARRAY:
-		for v in (eas_v as Array):
-			p.equipped_active_skills.append(String(v))
-	p.equipped_passive_skills = []
-	var eps_v: Variant = d.get("equipped_passive_skills", [])
-	if typeof(eps_v) == TYPE_ARRAY:
-		for v in (eps_v as Array):
-			p.equipped_passive_skills.append(String(v))
 
-	p.skill_levels = d.get("skill_levels", {})
+	var eav: Variant = d.get("equipped_active_skills", [])
+	p.equipped_active_skills = []
+	if typeof(eav) == TYPE_ARRAY:
+		for v in (eav as Array):
+			p.equipped_active_skills.append(String(v))
+
+	# support legacy misspelling if it exists
+	var slv: Variant = d.get("skill_levels", null)
+	if slv == null:
+		slv = d.get("skill_levls", {})
+	p.skill_levels = slv as Dictionary if typeof(slv) == TYPE_DICTIONARY else {}
+
+	var spv: Variant = d.get("skill_progress", {})
+	p.skill_progress = spv as Dictionary if typeof(spv) == TYPE_DICTIONARY else {}
+
 	p.ensure_active_skills_initialized()
+
+
 	
 	p.crucible_keys = int(d.get("crucible_keys", 0))
 	p.crucible_level = int(d.get("crucible_level", 1))
@@ -256,26 +264,27 @@ func add_xp(amount: int) -> int:
 func battlepass_active(now_unix: int) -> bool:
 	return battlepass_expires_unix > now_unix
 
-func ensure_class_and_skills_initialized() -> void:
-	if int(class_id) < 0:
-		return
-	#call this after loading or creating a new player
-	if class_def_id == "":
-		var base_def: ClassDef = ClassCatalog.base_def_for_class_id(class_id)
-		if base_def != null:
-			class_def_id = base_def.id
-			
-	#seed starter skills if missing (new save or older save)
-	if skill_levels.is_empty():
-		skill_levels = SkillCatalog.starting_skill_levels_for_class(class_id)
-		
-	if equipped_active_skills.is_empty():
-		equipped_active_skills = SkillCatalog.starting_active_loadout_for_class(class_id)
-		
-	if equipped_passive_skills.is_empty():
-		equipped_passive_skills = SkillCatalog.starting_passives_for_class(class_id)
+#func ensure_class_and_skills_initialized() -> void:
+	#if int(class_id) < 0:
+		#return
+	##call this after loading or creating a new player
+	#if class_def_id == "":
+		#var base_def: ClassDef = ClassCatalog.base_def_for_class_id(class_id)
+		#if base_def != null:
+			#class_def_id = base_def.id
+			#
+	##seed starter skills if missing (new save or older save)
+	#if skill_levels.is_empty():
+		#skill_levels = SkillCatalog.starting_skill_levels_for_class(class_id)
+		#
+	#if equipped_active_skills.is_empty():
+		#equipped_active_skills = SkillCatalog.starting_active_loadout_for_class(class_id)
+		#
+	#if equipped_passive_skills.is_empty():
+		#equipped_passive_skills = SkillCatalog.starting_passives_for_class(class_id)
 
 func ensure_active_skills_initialized() -> void:
+	# Equipped slots: always 5, empty by default
 	if equipped_active_skills == null:
 		equipped_active_skills = []
 	while equipped_active_skills.size() < ACTIVE_SKILL_SLOTS:
@@ -283,22 +292,41 @@ func ensure_active_skills_initialized() -> void:
 	if equipped_active_skills.size() > ACTIVE_SKILL_SLOTS:
 		equipped_active_skills = equipped_active_skills.slice(0, ACTIVE_SKILL_SLOTS)
 
+	# Dicts
 	if skill_levels == null:
 		skill_levels = {}
+	if skill_progress == null:
+		skill_progress = {}
 
-	# TEMP: grant all active skills at level 1 so you can test immediately.
-	# Replace later with your unlock/loot logic.
-	if skill_levels.size() == 0:
-		for id in SkillCatalog.all_active_ids():
-			skill_levels[id] = 1
-		var starter := SkillCatalog.starter_loadout()
-		for i in range(ACTIVE_SKILL_SLOTS):
-			equipped_active_skills[i] = starter[i] if i < starter.size() else ""
+	# All skills default to level 0 (locked) and 0 progress
+	var all_ids: Array[String] = SkillCatalog.all_active_ids()
+	for sid in all_ids:
+		if not skill_levels.has(sid):
+			skill_levels[sid] = 0
+		if not skill_progress.has(sid):
+			skill_progress[sid] = 0
 
-func get_skill_level(skill_id: String) -> int:
-	if skill_id == "":
-		return 0
-	return int(skill_levels.get(skill_id, 0))
+	# Sanitize equipped: must be unlocked + no duplicates
+	var seen: Dictionary = {}
+	for i in range(ACTIVE_SKILL_SLOTS):
+		var sid: String = String(equipped_active_skills[i])
+		if sid == "":
+			continue
+		if SkillCatalog.get_def(sid) == null:
+			equipped_active_skills[i] = ""
+			continue
+		var lvl: int = int(skill_levels.get(sid, 0))
+		if lvl <= 0:
+			equipped_active_skills[i] = ""
+			continue
+		if seen.has(sid):
+			equipped_active_skills[i] = ""
+			continue
+		seen[sid] = true
+
+# For compatibility with Home.gd's existing call
+func ensure_class_and_skills_initialized() -> void:
+	ensure_active_skills_initialized()
 
 func set_skill_level(skill_id: String, lvl: int) -> void:
 	if skill_id == "":
@@ -384,3 +412,53 @@ func current_class_name_display() -> String:
 			if cd != null:
 				return cd.display_name
 	return base_class_display_name()
+
+func get_skill_level(skill_id: String) -> int:
+	ensure_active_skills_initialized()
+	return int(skill_levels.get(skill_id, 0))
+
+func get_skill_progress(skill_id: String) -> int:
+	ensure_active_skills_initialized()
+	return int(skill_progress.get(skill_id, 0))
+
+func copies_required_for_next_level(skill_id: String) -> int:
+	# Level 0 -> 1 requires 1 copy
+	# Level 1 -> 2 requires 2 copies
+	# Level 2 -> 3 requires 4 copies
+	var lvl: int = get_skill_level(skill_id)
+	return maxi(1, lvl * 2)
+
+func add_skill_copies(skill_id: String, amount: int = 1) -> void:
+	if amount <= 0:
+		return
+	ensure_active_skills_initialized()
+	if SkillCatalog.get_def(skill_id) == null:
+		return
+	var cur: int = int(skill_progress.get(skill_id, 0))
+	skill_progress[skill_id] = cur + amount
+
+func can_upgrade_skill(skill_id: String) -> bool:
+	ensure_active_skills_initialized()
+	if SkillCatalog.get_def(skill_id) == null:
+		return false
+	var req: int = copies_required_for_next_level(skill_id)
+	return int(skill_progress.get(skill_id, 0)) >= req
+
+func upgrade_skill_once(skill_id: String) -> bool:
+	ensure_active_skills_initialized()
+	if not can_upgrade_skill(skill_id):
+		return false
+	var req: int = copies_required_for_next_level(skill_id)
+	var prog: int = int(skill_progress.get(skill_id, 0))
+	var lvl: int = int(skill_levels.get(skill_id, 0))
+
+	skill_progress[skill_id] = prog - req
+	skill_levels[skill_id] = lvl + 1
+	return true
+
+func upgrade_skill_max(skill_id: String) -> int:
+	# Useful later when a big gacha pull gives multiple copies.
+	var upgraded: int = 0
+	while upgrade_skill_once(skill_id):
+		upgraded += 1
+	return upgraded

@@ -26,15 +26,6 @@ func _ready() -> void:
 
 # ---------------- Tooltip helpers ----------------
 
-func _player_skill_level(skill_id: String) -> int:
-	if Game.player == null:
-		return 1
-	var lv: int = 1
-	if "skill_levels" in Game.player:
-		var d: Dictionary = Game.player.get("skill_levels")
-		lv = int(d.get(skill_id, 1))
-	return lv
-
 func _rarity_name_for_def(def: SkillDef) -> String:
 	if def == null:
 		return "Common"
@@ -60,12 +51,43 @@ func _tooltip_for_skill(skill_id: String) -> String:
 		return skill_id
 
 	var lv: int = _player_skill_level(skill_id)
-	var rar: String = _rarity_name_for_def(def)
-	var cd: String = "%.1fs" % float(def.cooldown)
+	var prog: int = _player_skill_progress(skill_id)
+	var req: int = _copies_required_for_next_level(lv)
 
-	return "%s\nRarity: %s\nLevel: %d\nCooldown: %s\n\n%s" % [
-		def.display_name, rar, lv, cd, def.description
+	# Example: Level 1 (0/2) after upgrading from 0->1
+	# For Level 0 it will show Level 0 (0/1) and indicate locked.
+	var lock_txt := "LOCKED\n" if lv <= 0 else ""
+	return "%s%s\nRarity: %s\nLevel: %d (%d/%d)\nCooldown: %.1fs\n\n%s" % [
+		lock_txt,
+		def.display_name,
+		_rarity_name_for_def(def),
+		lv, prog, req,
+		float(def.cooldown),
+		def.description
 	]
+
+func _player_skill_level(skill_id: String) -> int:
+	if Game.player == null:
+		return 0
+	if Game.player.has_method("ensure_active_skills_initialized"):
+		Game.player.call("ensure_active_skills_initialized")
+	var d: Variant = Game.player.get("skill_levels")
+	if typeof(d) != TYPE_DICTIONARY:
+		return 0
+	return int((d as Dictionary).get(skill_id, 0))
+
+func _player_skill_progress(skill_id: String) -> int:
+	if Game.player == null:
+		return 0
+	if Game.player.has_method("ensure_active_skills_initialized"):
+		Game.player.call("ensure_active_skills_initialized")
+	var d: Variant = Game.player.get("skill_progress")
+	if typeof(d) != TYPE_DICTIONARY:
+		return 0
+	return int((d as Dictionary).get(skill_id, 0))
+
+func _copies_required_for_next_level(level: int) -> int:
+	return maxi(1, level + 1)
 
 # ---------------- Icon helpers ----------------
 
@@ -157,7 +179,10 @@ func _build() -> void:
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(grid)
 
-	# Build options list once
+	# Build options list once (IMPORTANT: index 0 must be "")
+	_skill_ids = [""]
+	_icon_cache.clear()
+
 	var all: Array[String] = SkillCatalog.all_active_ids()
 	all.sort_custom(Callable(self, "_skill_less"))
 	for id in all:
@@ -219,6 +244,11 @@ func _build() -> void:
 				opt.set_item_icon(opt.item_count - 1, icon)
 
 			popup.set_item_tooltip(opt.item_count - 1, _tooltip_for_skill(sid))
+		
+			var item_i := opt.item_count - 1
+			var lv: int = _player_skill_level(sid)
+			if lv <= 0:
+				opt.set_item_disabled(item_i, true)
 
 
 		# Signal is item_selected(index:int)
@@ -283,7 +313,19 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	if index < 0 or index >= _skill_ids.size():
 		return
 
-	
+	if sid != "":
+		var lv: int = _player_skill_level(sid)
+		if lv <= 0:
+			# Revert selection to previous valid choice (whatever your panel uses)
+			# If you're tracking last selection: revert using set_block_signals(true/false)
+			# Otherwise simplest: force it empty.
+			var opt := _slot_opts[slot_idx]
+			opt.set_block_signals(true)
+			opt.select(0) # empty
+			opt.set_block_signals(false)
+			if _status_label != null:
+				_status_label.text = "That skill is locked (Level 0). Draw it to unlock."
+			return
 
 	# Read current equipped array
 	var eq: Array = []
