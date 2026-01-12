@@ -10,6 +10,7 @@ var _icon_cache: Dictionary = {}   # skill_id -> Texture2D (scaled)
 
 var _slot_last_selected: Array[int] = []
 var _status_label: Label = null
+var _upgrade_all_btn: Button = null
 
 
 func _ready() -> void:
@@ -265,11 +266,19 @@ func _build() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer.add_child(spacer)
+	
+	_upgrade_all_btn = Button.new()
+	_upgrade_all_btn.text = "Upgrade All"
+	_upgrade_all_btn.visible = false
+	_upgrade_all_btn.pressed.connect(_on_upgrade_all_pressed)
+	footer.add_child(_upgrade_all_btn)
 
 	var close := Button.new()
 	close.text = "Close"
 	close.pressed.connect(queue_free)
 	footer.add_child(close)
+	
+	_refresh_upgrade_all_visibility()
 
 func _refresh_from_player() -> void:
 	if Game.player == null:
@@ -287,13 +296,23 @@ func _refresh_from_player() -> void:
 
 	for i in range(SLOTS):
 		var sid := String(eq[i]) if i < eq.size() else ""
-		var idx := _skill_ids.find(sid)
-		if idx < 0:
-			idx = 0
-		_slot_opts[i].select(idx)
-		_slot_opts[i].tooltip_text = _tooltip_for_skill(sid)
+		var skill_idx: int = _skill_ids.find(sid)
+		if skill_idx < 0:
+			skill_idx = 0
+
+		var opt := _slot_opts[i]
+		var item_index: int = _find_item_index_by_id(opt, skill_idx)
+		if item_index < 0:
+			item_index = 0
+
+		opt.select(item_index)
+		opt.tooltip_text = _tooltip_for_skill(sid)
 		if i < _slot_last_selected.size():
-			_slot_last_selected[i] = idx
+			_slot_last_selected[i] = item_index
+
+			
+	# After any refresh, update button visibility (in case progress changed elsewhere)
+	_refresh_upgrade_all_visibility()
 
 # index = selected OptionButton item index, slot_idx passed via bind()
 func _on_slot_selected(index: int, slot_idx: int) -> void:
@@ -305,23 +324,44 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	if _status_label != null:
 		_status_label.text = ""
 
-	# Determine the requested skill id
-	var sid: String = ""
-	if index >= 0 and index < _skill_ids.size():
-		sid = _skill_ids[index]
-	# If something weird selected (header), ignore
-	if index < 0 or index >= _skill_ids.size():
+	# ------------------------------------------------------------
+	# FIX: resolve selection via OptionButton item_id (headers shift indices)
+	# index = popup item index
+	# item_id = we set this when adding items (idx for skills, -1 for headers, 0 for empty)
+	# ------------------------------------------------------------
+	if slot_idx < 0 or slot_idx >= _slot_opts.size():
+		return
+	var opt := _slot_opts[slot_idx]
+	if opt == null:
+		return
+	if index < 0 or index >= opt.item_count:
 		return
 
+	var item_id: int = opt.get_item_id(index)
+
+	# Header rows are id -1 (disabled, but guard anyway)
+	if item_id == -1:
+		var prev_idx: int = 0
+		if slot_idx >= 0 and slot_idx < _slot_last_selected.size():
+			prev_idx = _slot_last_selected[slot_idx]
+		opt.set_block_signals(true)
+		opt.select(prev_idx)
+		opt.set_block_signals(false)
+		return
+
+	# Resolve to skill id (0 = empty)
+	var sid: String = ""
+	if item_id > 0 and item_id < _skill_ids.size():
+		sid = _skill_ids[item_id]
+	# If item_id is 0, sid stays "" meaning empty
+	# ------------------------------------------------------------
+
+	# Locked (level 0) cannot be equipped
 	if sid != "":
 		var lv: int = _player_skill_level(sid)
 		if lv <= 0:
-			# Revert selection to previous valid choice (whatever your panel uses)
-			# If you're tracking last selection: revert using set_block_signals(true/false)
-			# Otherwise simplest: force it empty.
-			var opt := _slot_opts[slot_idx]
 			opt.set_block_signals(true)
-			opt.select(0) # empty
+			opt.select(0) # empty item index is always 0
 			opt.set_block_signals(false)
 			if _status_label != null:
 				_status_label.text = "That skill is locked (Level 0). Draw it to unlock."
@@ -332,7 +372,6 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	var eqv: Variant = Game.player.get("equipped_active_skills")
 	if typeof(eqv) == TYPE_ARRAY:
 		eq = eqv as Array
-
 	while eq.size() < SLOTS:
 		eq.append("")
 
@@ -342,7 +381,6 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 			if i == slot_idx:
 				continue
 			if String(eq[i]) == sid:
-				# Duplicate detected: revert UI selection to previous and show message
 				if _status_label != null:
 					var def := SkillCatalog.get_def(sid)
 					var nm := def.display_name if def != null else sid
@@ -351,13 +389,11 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 				var prev := 0
 				if slot_idx >= 0 and slot_idx < _slot_last_selected.size():
 					prev = _slot_last_selected[slot_idx]
-				# Revert without triggering recursion
-				var opt := _slot_opts[slot_idx]
+
 				if opt != null:
 					opt.set_block_signals(true)
-					opt.select(prev)
+					opt.select(prev) # prev is a popup item index
 					opt.set_block_signals(false)
-
 				return
 
 	# Apply selection
@@ -365,15 +401,16 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	Game.player.set("equipped_active_skills", eq)
 
 	# Update slot tooltip immediately
-	if slot_idx >= 0 and slot_idx < _slot_opts.size():
-		_slot_opts[slot_idx].tooltip_text = _tooltip_for_skill(sid)
+	opt.tooltip_text = _tooltip_for_skill(sid)
 
-	# Remember last valid selection
+	# Remember last valid selection (store the popup item index)
 	if slot_idx >= 0 and slot_idx < _slot_last_selected.size():
 		_slot_last_selected[slot_idx] = index
 
 	SaveManager.save_now()
 	Game.player_changed.emit()
+
+	_refresh_upgrade_all_visibility()
 
 func _center_panel() -> void:
 	var panel := get_node_or_null("MainPanel") as Control
@@ -421,3 +458,106 @@ func _rarity_header_text(r: int) -> String:
 		3: return "— Legendary —"
 		4: return "— Mythical —"
 	return "— Common —"
+
+func _find_item_index_by_id(opt: OptionButton, wanted_id: int) -> int:
+	for i in range(opt.item_count):
+		if opt.get_item_id(i) == wanted_id:
+			return i
+	return -1
+
+
+# ---------------- Upgrades ----------------
+
+func _can_upgrade_skill(skill_id: String) -> bool:
+	if skill_id == "":
+		return false
+	var lv: int = _player_skill_level(skill_id)
+	var prog: int = _player_skill_progress(skill_id)
+	var req: int = _copies_required_for_next_level(lv)
+	return prog >= req
+
+func _can_upgrade_any() -> bool:
+	# _skill_ids[0] is "".
+	for i in range(1, _skill_ids.size()):
+		var sid: String = _skill_ids[i]
+		if _can_upgrade_skill(sid):
+			return true
+	return false
+
+func _refresh_upgrade_all_visibility() -> void:
+	if _upgrade_all_btn == null:
+		return
+	_upgrade_all_btn.visible = _can_upgrade_any()
+
+func _refresh_option_unlock_states() -> void:
+	# Enable/disable dropdown entries based on updated levels and refresh tooltips.
+	for opt in _slot_opts:
+		if opt == null:
+			continue
+		var popup := opt.get_popup()
+		for item_index in range(opt.item_count):
+			var item_id: int = opt.get_item_id(item_index)
+			# id -1 = header, 0 = empty, >=1 maps to _skill_ids
+			if item_id <= 0:
+				continue
+			if item_id >= _skill_ids.size():
+				continue
+			var sid: String = _skill_ids[item_id]
+			var lv: int = _player_skill_level(sid)
+			opt.set_item_disabled(item_index, lv <= 0)
+			popup.set_item_tooltip(item_index, _tooltip_for_skill(sid))
+
+func _on_upgrade_all_pressed() -> void:
+	if Game.player == null:
+		return
+	if Game.player.has_method("ensure_active_skills_initialized"):
+		Game.player.call("ensure_active_skills_initialized")
+
+	# Pull dict references, but write back via set() after mutation.
+	var levels_v: Variant = Game.player.get("skill_levels")
+	var prog_v: Variant = Game.player.get("skill_progress")
+	if typeof(levels_v) != TYPE_DICTIONARY or typeof(prog_v) != TYPE_DICTIONARY:
+		return
+
+	var levels: Dictionary = levels_v as Dictionary
+	var prog: Dictionary = prog_v as Dictionary
+
+	var total_levels_gained: int = 0
+	var skills_upgraded: int = 0
+
+	for i in range(1, _skill_ids.size()):
+		var sid: String = _skill_ids[i]
+		var lv: int = int(levels.get(sid, 0))
+		var p: int = int(prog.get(sid, 0))
+		var gained: int = 0
+
+		while true:
+			var req: int = _copies_required_for_next_level(lv)
+			if p < req:
+				break
+			p -= req
+			lv += 1
+			gained += 1
+
+		if gained > 0:
+			skills_upgraded += 1
+			total_levels_gained += gained
+			levels[sid] = lv
+			prog[sid] = p
+
+	# Persist back to player
+	Game.player.set("skill_levels", levels)
+	Game.player.set("skill_progress", prog)
+
+	if _status_label != null:
+		if total_levels_gained > 0:
+			_status_label.text = "Upgraded %d level(s) across %d skill(s)." % [total_levels_gained, skills_upgraded]
+		else:
+			_status_label.text = ""
+
+	SaveManager.save_now()
+	Game.player_changed.emit()
+
+	# Refresh UI states (unlocking/tooltip updates and button visibility)
+	_refresh_option_unlock_states()
+	_refresh_upgrade_all_visibility()
