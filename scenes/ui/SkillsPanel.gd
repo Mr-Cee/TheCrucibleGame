@@ -198,7 +198,8 @@ func _build() -> void:
 			var def := SkillCatalog.get_def(sid)
 			opt.add_item(def.display_name if def != null else sid, idx)
 
-			var icon := _scaled_icon_for_skill_id(sid)
+			var icon := SkillCatalog.icon_with_rarity_border(sid, ICON_SIZE, 2)
+
 			if icon != null:
 				opt.set_item_icon(opt.item_count - 1, icon)
 

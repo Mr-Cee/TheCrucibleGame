@@ -6,26 +6,6 @@ class_name SkillCatalog
 
 static var _defs: Dictionary = {} # id -> SkillDef
 
-
-
-
-static func _add_def(id: String, name: String, desc: String, cd: float, effect: SkillDef.EffectType,
-		power: float, hits: int = 1, duration: float = 0.0, magnitude: float = 0.0, secondary_power: float = 0.0) -> void:
-	var d := SkillDef.new()
-	d.id = id
-	d.display_name = name
-	d.description = desc
-	d.rarity = RARITY_BY_ID.get(id, SkillDef.SkillRarity.COMMON)
-	d.icon_path = "res://assets/icons/skills/%s.png" % id
-	d.cooldown = cd
-	d.effect = effect
-	d.power = power
-	d.hits = hits
-	d.duration = duration
-	d.magnitude = magnitude
-	d.secondary_power = secondary_power
-	_defs[id] = d
-
 const RARITY_BY_ID := {
 	# ------------------------
 	# Common (simple baseline)
@@ -76,6 +56,26 @@ const RARITY_BY_ID := {
 	# ------------------------
 	"arcane_overload": SkillDef.SkillRarity.MYTHICAL,
 }
+
+static var _icon_cache_plain: Dictionary = {}   # key -> Texture2D
+static var _icon_cache_border: Dictionary = {}  # key -> Texture2D
+
+static func _add_def(id: String, name: String, desc: String, cd: float, effect: SkillDef.EffectType,
+		power: float, hits: int = 1, duration: float = 0.0, magnitude: float = 0.0, secondary_power: float = 0.0) -> void:
+	var d := SkillDef.new()
+	d.id = id
+	d.display_name = name
+	d.description = desc
+	d.rarity = RARITY_BY_ID.get(id, SkillDef.SkillRarity.COMMON)
+	d.icon_path = "res://assets/icons/skills/%s.png" % id
+	d.cooldown = cd
+	d.effect = effect
+	d.power = power
+	d.hits = hits
+	d.duration = duration
+	d.magnitude = magnitude
+	d.secondary_power = secondary_power
+	_defs[id] = d
 
 static func _ensure_built() -> void:
 	if _defs.size() > 0:
@@ -258,3 +258,77 @@ static func starting_passives_for_class(_class_id: int) -> Array[String]:
 	# Passive system later. For now, start with none.
 	return []
 	
+# ---------------- Icon helpers (shared by ALL UIs) ----------------
+
+static func _base_icon(skill_id: String) -> Texture2D:
+	var d: SkillDef = get_def(skill_id)
+	if d == null:
+		return null
+	var tex: Texture2D = d.icon_texture()
+	if tex != null:
+		return tex
+	# fallback by convention
+	var p := "res://assets/icons/skills/%s.png" % skill_id
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
+static func icon_scaled(skill_id: String, size: int) -> Texture2D:
+	# Cached resized icon (no border)
+	var key := "%s|%d" % [skill_id, size]
+	if _icon_cache_plain.has(key):
+		return _icon_cache_plain[key]
+	var tex := _base_icon(skill_id)
+	if tex == null:
+		_icon_cache_plain[key] = null
+		return null
+	var img := tex.get_image()
+	if img == null:
+		_icon_cache_plain[key] = tex
+		return tex
+	img.resize(size, size, Image.INTERPOLATE_LANCZOS)
+	var out := ImageTexture.create_from_image(img)
+	_icon_cache_plain[key] = out
+	return out
+
+static func icon_with_rarity_border(skill_id: String, size: int, border_px: int = 2) -> Texture2D:
+	# Cached border-framed icon (rarity color)
+	var key := "%s|%d|%d" % [skill_id, size, border_px]
+	if _icon_cache_border.has(key):
+		return _icon_cache_border[key]
+
+	var def: SkillDef = get_def(skill_id)
+	if def == null:
+		_icon_cache_border[key] = null
+		return null
+
+	var inner: int = maxi(1, int(size) - (int(border_px) * 2))
+	var inner_tex := icon_scaled(skill_id, inner)
+	if inner_tex == null:
+		_icon_cache_border[key] = null
+		return null
+
+	var border_color: Color = SkillDef.rarity_color(int(def.rarity))
+
+	var out_img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	out_img.fill(Color(0, 0, 0, 0))
+
+	# Draw border (thickness = border_px)
+	for t in range(border_px):
+	# top/bottom
+		for x in range(size):
+			out_img.set_pixel(x, t, border_color)
+			out_img.set_pixel(x, size - 1 - t, border_color)
+		# left/right
+		for y in range(size):
+			out_img.set_pixel(t, y, border_color)
+			out_img.set_pixel(size - 1 - t, y, border_color)
+
+	# Blit icon inside border
+	var inner_img := inner_tex.get_image()
+	if inner_img != null:
+		out_img.blit_rect(inner_img, Rect2i(0, 0, inner, inner), Vector2i(border_px, border_px))
+
+	var out_tex := ImageTexture.create_from_image(out_img)
+	_icon_cache_border[key] = out_tex
+	return out_tex

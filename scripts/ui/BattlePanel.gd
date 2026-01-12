@@ -268,7 +268,8 @@ func _apply_skill_row() -> void:
 			continue
 
 		var d := SkillCatalog.get_def(sid)
-		btn.icon = _scaled_skill_icon(sid)
+		btn.icon = SkillCatalog.icon_with_rarity_border(sid, SKILL_ICON_SIZE, 2)
+
 		btn.tooltip_text = (d.display_name + "\n" + d.description) if d != null else sid
 
 		var rem: float = 0.0

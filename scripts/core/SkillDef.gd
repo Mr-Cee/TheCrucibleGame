@@ -34,14 +34,6 @@ enum EffectType {
 enum SkillRarity { COMMON, UNCOMMON, RARE, LEGENDARY, MYTHICAL }
 @export var rarity: SkillRarity = SkillRarity.COMMON
 
-static func rarity_name(r: SkillRarity) -> String:
-	match r:
-		SkillRarity.COMMON: return "Common"
-		SkillRarity.UNCOMMON: return "Uncommon"
-		SkillRarity.RARE: return "Rare"
-		SkillRarity.LEGENDARY: return "Legendary"
-		SkillRarity.MYTHICAL: return "Mythical"
-	return "Common"
 
 @export var description: String = ""
 @export var icon_path: String = "" # e.g. "res://assets/icons/skills/arcane_bolt.png"
@@ -84,11 +76,34 @@ func effective_cooldown(int_stat: float) -> float:
 	return cooldown * (1.0 - cdr)
 
 func icon_texture() -> Texture2D:
-	# Lazy load anc cache the icon texture
 	if _icon_cache != null:
 		return _icon_cache
 	if icon_path == "":
-		return null
+		icon_path = "res://assets/icons/skills/%s.png" % id
 	if ResourceLoader.exists(icon_path):
 		_icon_cache = load(icon_path) as Texture2D
 	return _icon_cache
+
+static func rarity_name(r: SkillRarity) -> String:
+	match r:
+		SkillRarity.COMMON: return "Common"
+		SkillRarity.UNCOMMON: return "Uncommon"
+		SkillRarity.RARE: return "Rare"
+		SkillRarity.LEGENDARY: return "Legendary"
+		SkillRarity.MYTHICAL: return "Mythical"
+	return "Common"
+
+static func rarity_color(r: int) -> Color:
+	# Reuse gear colors when possible.
+	match int(r):
+		SkillRarity.COMMON:
+			return Catalog.RARITY_COLORS.get(Catalog.Rarity.COMMON, Color("95a5a6"))
+		SkillRarity.UNCOMMON:
+			return Catalog.RARITY_COLORS.get(Catalog.Rarity.UNCOMMON, Color("2ecc71"))
+		SkillRarity.RARE:
+			return Catalog.RARITY_COLORS.get(Catalog.Rarity.RARE, Color("3498db"))
+		SkillRarity.LEGENDARY:
+			return Catalog.RARITY_COLORS.get(Catalog.Rarity.LEGENDARY, Color("e67e22"))
+		SkillRarity.MYTHICAL:
+			return Catalog.RARITY_COLORS.get(Catalog.Rarity.MYTHIC, Color("f1c40f"))
+	return Color("95a5a6")
