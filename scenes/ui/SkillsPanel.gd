@@ -116,7 +116,7 @@ func _build() -> void:
 	var panel := PanelContainer.new()
 	panel.name = "MainPanel"
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.custom_minimum_size = Vector2(640, 480) # same as your -320..320 and -240..240
+	panel.custom_minimum_size = Vector2(640, 550) # same as your -320..320 and -240..240
 	add_child(panel)
 
 
@@ -188,22 +188,38 @@ func _build() -> void:
 		row.add_child(opt)
 		_slot_opts.append(opt)
 
-		# Build items + icons + item tooltips
+		# Build items + icons + tooltips + rarity headers
+		opt.clear()
 		opt.add_item("(Empty)", 0)
 		var popup := opt.get_popup()
 		popup.set_item_tooltip(0, _tooltip_for_skill(""))
 
+		var last_rarity: int = -1
+
+		# _skill_ids[0] is "", and ids from 1.. are already sorted by rarity then name
 		for idx in range(1, _skill_ids.size()):
-			var sid := _skill_ids[idx]
+			var sid: String = _skill_ids[idx]
+			var r: int = _rarity_rank(sid)
+
+			# Insert header when rarity changes
+			if r != last_rarity:
+				last_rarity = r
+				opt.add_item(_rarity_header_text(r), -1) # id -1 for header
+				var header_i := opt.item_count - 1
+				opt.set_item_disabled(header_i, true)
+				# Optional: a small tooltip on headers (or leave blank)
+				popup.set_item_tooltip(header_i, "")
+
+			# Actual selectable skill entry
 			var def := SkillCatalog.get_def(sid)
 			opt.add_item(def.display_name if def != null else sid, idx)
 
 			var icon := SkillCatalog.icon_with_rarity_border(sid, ICON_SIZE, 2)
-
 			if icon != null:
 				opt.set_item_icon(opt.item_count - 1, icon)
 
 			popup.set_item_tooltip(opt.item_count - 1, _tooltip_for_skill(sid))
+
 
 		# Signal is item_selected(index:int)
 		opt.item_selected.connect(_on_slot_selected.bind(slot_idx))
@@ -249,7 +265,6 @@ func _refresh_from_player() -> void:
 		if i < _slot_last_selected.size():
 			_slot_last_selected[i] = idx
 
-
 # index = selected OptionButton item index, slot_idx passed via bind()
 func _on_slot_selected(index: int, slot_idx: int) -> void:
 	if Game.player == null:
@@ -264,6 +279,11 @@ func _on_slot_selected(index: int, slot_idx: int) -> void:
 	var sid: String = ""
 	if index >= 0 and index < _skill_ids.size():
 		sid = _skill_ids[index]
+	# If something weird selected (header), ignore
+	if index < 0 or index >= _skill_ids.size():
+		return
+
+	
 
 	# Read current equipped array
 	var eq: Array = []
@@ -325,7 +345,6 @@ func _center_panel() -> void:
 	var vp := get_viewport_rect().size
 	panel.position = (vp - panel.size) * 0.5
 
-
 func _rarity_rank(skill_id: String) -> int:
 	var def: SkillDef = SkillCatalog.get_def(skill_id)
 	if def == null:
@@ -351,3 +370,12 @@ func _skill_less(a: String, b: String) -> bool:
 		return na < nb
 	# final tie-breaker
 	return a < b
+
+func _rarity_header_text(r: int) -> String:
+	match r:
+		0: return "— Common —"
+		1: return "— Uncommon —"
+		2: return "— Rare —"
+		3: return "— Legendary —"
+		4: return "— Mythical —"
+	return "— Common —"
