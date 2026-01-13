@@ -332,3 +332,86 @@ static func icon_with_rarity_border(skill_id: String, size: int, border_px: int 
 	var out_tex := ImageTexture.create_from_image(out_img)
 	_icon_cache_border[key] = out_tex
 	return out_tex
+
+static func generator_rarity_weights(level: int) -> Dictionary:
+	# returns {"rarities":[int...], "weights":[float...]}
+	# Common > Uncommon > Rare > Legendary > Mythical
+	if level <= 1:
+		return {"rarities":[0,1], "weights":[90.0,10.0]}
+	if level == 2:
+		return {"rarities":[0,1,2], "weights":[80.0,18.0,2.0]}
+	if level == 3:
+		return {"rarities":[0,1,2], "weights":[70.0,25.0,5.0]}
+	if level == 4:
+		return {"rarities":[0,1,2,3], "weights":[60.0,28.0,10.0,2.0]}
+	if level == 5:
+		return {"rarities":[0,1,2,3,4], "weights":[50.0,30.0,15.0,4.0,1.0]}
+	if level == 6:
+		return {"rarities":[0,1,2,3,4], "weights":[40.0,30.0,20.0,8.0,2.0]}
+	# 7+
+	return {"rarities":[0,1,2,3,4], "weights":[30.0,30.0,25.0,12.0,3.0]}
+
+static func generator_odds_text(level: int) -> String:
+	var d: Dictionary = generator_rarity_weights(level)
+	var r: Array = d["rarities"]
+	var w: Array = d["weights"]
+	var lines: Array[String] = []
+	for i in range(r.size()):
+		var rn := int(r[i])
+		var pct := float(w[i])
+		var name := "Common"
+		match rn:
+			0: name = "Common"
+			1: name = "Uncommon"
+			2: name = "Rare"
+			3: name = "Legendary"
+			4: name = "Mythical"
+		lines.append("%s: %.1f%%" % [name, pct])
+	return "\n".join(lines)
+
+static func _ids_by_rarity(rarity: int) -> Array[String]:
+	_ensure_built()
+	var out: Array[String] = []
+	for k in _defs.keys():
+		var sid: String = String(k)
+		var def: SkillDef = _defs[sid]
+		var r: int = 0
+		if def != null and ("rarity" in def):
+			r = int(def.get("rarity"))
+		if r == rarity:
+			out.append(sid)
+	return out
+
+static func roll_generator_rarity(level: int) -> int:
+	var d: Dictionary = generator_rarity_weights(level)
+	var rarities: Array = d["rarities"]
+	var weights: Array = d["weights"]
+	var total: float = 0.0
+	for ww in weights:
+		total += float(ww)
+	if total <= 0.0:
+		return 0
+	var roll: float = (RNG as RNGService).randf() * total
+	var acc: float = 0.0
+	for i in range(weights.size()):
+		acc += float(weights[i])
+		if roll <= acc:
+			return int(rarities[i])
+	return int(rarities[rarities.size() - 1])
+
+static func roll_skill_for_generator(level: int) -> String:
+	_ensure_built()
+	var r: int = roll_generator_rarity(level)
+
+	# Try chosen rarity, then degrade if no skills exist (safety)
+	for rr in range(r, -1, -1):
+		var ids: Array[String] = _ids_by_rarity(rr)
+		if ids.size() > 0:
+			var idx: int = (RNG as RNGService).randi_range(0, ids.size() - 1)
+			return ids[idx]
+
+	# Absolute fallback
+	var all := all_active_ids()
+	if all.size() == 0:
+		return ""
+	return all[(RNG as RNGService).randi_range(0, all.size() - 1)]

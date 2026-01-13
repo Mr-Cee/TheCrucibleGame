@@ -262,6 +262,14 @@ func _build() -> void:
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 10)
 	root.add_child(footer)
+	
+	var gen := Button.new()
+	gen.text = "Generator"
+	gen.pressed.connect(func() -> void:
+		var p := SkillGeneratorPanel.new()
+		get_tree().root.add_child(p)
+	)
+	footer.add_child(gen)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL

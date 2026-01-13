@@ -13,6 +13,12 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 
 @export var time_vouchers: int = 0
 
+@export var skill_tickets: int = 0
+@export var skill_gen_level: int = 1
+@export var skill_gen_xp: int = 0
+@export var skill_ad_draws_used_today: int = 0
+@export var skill_ad_draws_day_key: int = 0
+
 @export var crucible_keys: int = 10
 @export var crucible_level: int = 1
 
@@ -147,6 +153,11 @@ func to_dict() -> Dictionary:
 		"skill_auto": skill_auto,
 		"crucible_keys": crucible_keys,
 		"crucible_level": crucible_level,
+		"skill_tickets": skill_tickets,
+		"skill_gen_level": skill_gen_level,
+		"skill_gen_xp": skill_gen_xp,
+		"skill_ad_draws_used_today": skill_ad_draws_used_today,
+		"skill_ad_draws_day_key": skill_ad_draws_day_key,
 		"equipped": eq_out,
 		"deferred_gear": deferred_gear,
 		"crucible_batch": crucible_batch,
@@ -208,6 +219,14 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	
 	p.premium_offline_unlocked = bool(d.get("premium_offline_unlocked", false))
 	p.battlepass_expires_unix = int(d.get("battlepass_expires_unix", 0))
+	
+	p.skill_tickets = int(d.get("skill_tickets", 0))
+	p.skill_gen_level = int(d.get("skill_gen_level", 1))
+	p.skill_gen_xp = int(d.get("skill_gen_xp", 0))
+	p.skill_ad_draws_used_today = int(d.get("skill_ad_draws_used_today", 0))
+	p.skill_ad_draws_day_key = int(d.get("skill_ad_draws_day_key", 0))
+	p.ensure_skill_generator_initialized()
+
 
 
 	var dg: Variant = d.get("deferred_gear", [])
@@ -462,3 +481,39 @@ func upgrade_skill_max(skill_id: String) -> int:
 	while upgrade_skill_once(skill_id):
 		upgraded += 1
 	return upgraded
+
+func ensure_skill_generator_initialized() -> void:
+	if skill_gen_level <= 0:
+		skill_gen_level = 1
+	if skill_gen_xp < 0:
+		skill_gen_xp = 0
+	if skill_ad_draws_used_today < 0:
+		skill_ad_draws_used_today = 0
+	if skill_ad_draws_day_key < 0:
+		skill_ad_draws_day_key = 0
+
+func ensure_skill_generator_daily_reset(now_unix: int) -> void:
+	ensure_skill_generator_initialized()
+	var day_key: int = int(floor(float(now_unix) / 86400.0))
+	if day_key != skill_ad_draws_day_key:
+		skill_ad_draws_day_key = day_key
+		skill_ad_draws_used_today = 0
+
+func skill_gen_xp_required_for_next_level() -> int:
+	# Simple ramp; tune later
+	return 50 + ((skill_gen_level - 1) * 25)
+
+func add_skill_generator_xp(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	ensure_skill_generator_initialized()
+	var gained: int = 0
+	skill_gen_xp += amount
+	while true:
+		var need: int = skill_gen_xp_required_for_next_level()
+		if skill_gen_xp < need:
+			break
+		skill_gen_xp -= need
+		skill_gen_level += 1
+		gained += 1
+	return gained
