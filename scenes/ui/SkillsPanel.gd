@@ -20,10 +20,26 @@ func _ready() -> void:
 	offset_top = 0
 	offset_right = 0
 	offset_bottom = 0
-
+	Game.player_changed.connect(_on_player_changed)
 	_build()
 	# Defer centering until controls have a real size.
 	call_deferred("_center_panel")
+
+func _on_player_changed() -> void:
+	refresh_ui()
+
+func refresh_ui() -> void:
+	# Clear any cached icons so the UI can rebuild if needed.
+	_icon_cache.clear()
+
+	if has_method("_refresh_from_player"):
+		call("_refresh_from_player")
+
+	# These exist in your newer SkillsPanel versions; safe-call so this file still compiles.
+	if has_method("_refresh_upgrade_all_visibility"):
+		call("_refresh_upgrade_all_visibility")
+	if has_method("_refresh_option_unlock_states"):
+		call("_refresh_option_unlock_states")
 
 # ---------------- Tooltip helpers ----------------
 
@@ -267,6 +283,11 @@ func _build() -> void:
 	gen.text = "Generator"
 	gen.pressed.connect(func() -> void:
 		var p := SkillGeneratorPanel.new()
+
+		# When generator closes, refresh this skills panel immediately
+		if p.has_signal("closed"):
+			p.connect("closed", Callable(self, "refresh_ui"))
+
 		get_tree().root.add_child(p)
 	)
 	footer.add_child(gen)

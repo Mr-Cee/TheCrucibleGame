@@ -7,7 +7,9 @@ const AD_DRAWS_PER_DAY: int = 3
 var _panel: PanelContainer = null
 var _status: Label = null
 var _lvl_label: Label = null
-var _odds_label: Label = null
+var _odds_grid: GridContainer = null
+var _odds_value_labels: Dictionary = {} # rarity(int) -> Label
+
 var _currency_label: Label = null
 
 var _btn_ad: Button = null
@@ -19,6 +21,25 @@ var _pending_draw_count: int = 0
 var _pending_ticket_cost: int = 0
 var _pending_is_ad: bool = false
 var _pending_crystal_cost: int = 0
+
+signal closed
+
+const SKILL_RARITY_ORDER: Array[int] = [0, 1, 2, 3, 4]
+const SKILL_RARITY_NAMES := {
+	0: "Common",
+	1: "Uncommon",
+	2: "Rare",
+	3: "Legendary",
+	4: "Mythical",
+}
+const SKILL_RARITY_COLORS := {
+	0: Color("8a8a8a"), # common gray
+	1: Color("2ecc71"), # uncommon green
+	2: Color("3498db"), # rare blue
+	3: Color("e67e22"), # legendary orange
+	4: Color("f1c40f"), # mythical yellow
+}
+
 
 func _ready() -> void:
 	top_level = true
@@ -37,7 +58,7 @@ func _build() -> void:
 
 	var dim := ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0, 0, 0, 0.55)
+	dim.color = Color(0, 0, 0, 0.85)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 
@@ -46,6 +67,20 @@ func _build() -> void:
 	_panel.custom_minimum_size = Vector2(680, 520)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_panel)
+	
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(0.08, 0.08, 0.10, 0.98)
+	psb.border_color = Color(0.25, 0.25, 0.30, 1.0)
+	psb.border_width_left = 2
+	psb.border_width_top = 2
+	psb.border_width_right = 2
+	psb.border_width_bottom = 2
+	psb.corner_radius_top_left = 10
+	psb.corner_radius_top_right = 10
+	psb.corner_radius_bottom_left = 10
+	psb.corner_radius_bottom_right = 10
+	_panel.add_theme_stylebox_override("panel", psb)
+
 
 	var root := VBoxContainer.new()
 	root.offset_left = 12
@@ -69,10 +104,19 @@ func _build() -> void:
 	_lvl_label.text = ""
 	root.add_child(_lvl_label)
 
-	_odds_label = Label.new()
-	_odds_label.text = ""
-	_odds_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(_odds_label)
+	var odds_header := Label.new()
+	odds_header.text = "Rarity Odds"
+	odds_header.add_theme_font_size_override("font_size", 16)
+	root.add_child(odds_header)
+
+	_odds_grid = GridContainer.new()
+	_odds_grid.columns = 2
+	_odds_grid.add_theme_constant_override("h_separation", 10)
+	_odds_grid.add_theme_constant_override("v_separation", 8)
+	root.add_child(_odds_grid)
+
+	_build_odds_table()
+
 
 	_status = Label.new()
 	_status.text = ""
@@ -121,7 +165,7 @@ func _build() -> void:
 
 	var close := Button.new()
 	close.text = "Back"
-	close.pressed.connect(queue_free)
+	close.pressed.connect(_on_back_pressed)
 	footer.add_child(close)
 
 	# Confirmation dialog for “tickets + crystals”
@@ -168,8 +212,9 @@ func _refresh() -> void:
 
 	_lvl_label.text = "Generator Level: %d    XP: %d/%d" % [lvl, xp, need]
 
-	var odds := SkillCatalog.generator_odds_text(lvl)
-	_odds_label.text = "Rarity Odds:\n%s" % odds
+	var odds_txt: String = SkillCatalog.generator_odds_text(lvl)
+	_set_odds_from_text(odds_txt)
+
 
 	var used: int = int(Game.player.get("skill_ad_draws_used_today"))
 	var remaining: int = maxi(0, AD_DRAWS_PER_DAY - used)
@@ -293,3 +338,77 @@ func _execute_draw() -> void:
 	res.set_awards(awarded)
 
 	_refresh()
+
+func _on_back_pressed() -> void:
+	emit_signal("closed")
+	# also wake any listeners that rely on player_changed
+	Game.player_changed.emit()
+	queue_free()
+
+func _build_odds_table() -> void:
+	if _odds_grid == null:
+		return
+
+	for c in _odds_grid.get_children():
+		c.queue_free()
+
+	_odds_value_labels.clear()
+
+	for r in SKILL_RARITY_ORDER:
+		var rname: String = String(SKILL_RARITY_NAMES.get(r, "Rarity"))
+		var rcol: Color = SKILL_RARITY_COLORS.get(r, Color.WHITE)
+
+		# Name cell with crucible-like tint + border
+		var name_panel := PanelContainer.new()
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(rcol.r, rcol.g, rcol.b, 0.18)
+		sb.border_color = rcol
+		sb.border_width_left = 2
+		sb.border_width_top = 2
+		sb.border_width_right = 2
+		sb.border_width_bottom = 2
+		sb.corner_radius_top_left = 6
+		sb.corner_radius_top_right = 6
+		sb.corner_radius_bottom_left = 6
+		sb.corner_radius_bottom_right = 6
+		name_panel.add_theme_stylebox_override("panel", sb)
+
+		var name_lbl := Label.new()
+		name_lbl.text = rname
+		name_lbl.add_theme_color_override("font_color", Color.WHITE)
+		name_panel.add_child(name_lbl)
+		_odds_grid.add_child(name_panel)
+
+		# Value cell
+		var val_lbl := Label.new()
+		val_lbl.text = "0.0%"
+		val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_odds_grid.add_child(val_lbl)
+		_odds_value_labels[r] = val_lbl
+
+func _set_odds_from_text(text: String) -> void:
+	# Parses lines like "Common: 90.0%"
+	var map: Dictionary = {}
+	var lines: PackedStringArray = text.split("\n", false)
+	for ln in lines:
+		var line: String = ln.strip_edges()
+		if line == "":
+			continue
+		var parts: PackedStringArray = line.split(":", false, 2)
+		if parts.size() < 2:
+			continue
+		var name: String = parts[0].strip_edges()
+		var rhs: String = parts[1].strip_edges()
+		rhs = rhs.replace("%", "").strip_edges()
+		var pct: float = 0.0
+		if rhs.is_valid_float():
+			pct = float(rhs)
+		map[name] = pct
+
+	for r in SKILL_RARITY_ORDER:
+		var lbl: Label = _odds_value_labels.get(r, null)
+		if lbl == null:
+			continue
+		var rname: String = String(SKILL_RARITY_NAMES.get(r, "Rarity"))
+		var pct: float = float(map.get(rname, 0.0))
+		lbl.text = "%.1f%%" % pct
