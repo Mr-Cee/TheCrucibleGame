@@ -3,10 +3,10 @@
 [ext_resource type="Script" uid="uid://duue37ceul2eu" path="res://scripts/ui/Home.gd" id="1_q8k43"]
 [ext_resource type="Script" uid="uid://dsrf0yho3x3xx" path="res://scripts/ui/BattlePanel.gd" id="2_qhh6x"]
 [ext_resource type="Script" uid="uid://c7hs3wd6qyjoa" path="res://scripts/ui/CruciblePanel.gd" id="3_dsbsq"]
-[ext_resource type="Script" uid="uid://lphcl2pckchy" path="res://scenes/ui/speedbox.gd" id="3_y282l"]
+[ext_resource type="Script" uid="uid://lphcl2pckchy" path="res://scripts/ui/speedbox.gd" id="3_y282l"]
 [ext_resource type="Script" uid="uid://bg8bd7hdof10m" path="res://scripts/ui/GearPanel.gd" id="4_y282l"]
-[ext_resource type="Script" uid="uid://bygie1to68dx5" path="res://scenes/ui/crucible_upgrade_popup.gd" id="5_qhh6x"]
-[ext_resource type="Script" uid="uid://bgq4wivjcuh04" path="res://scenes/ui/DevPopup.gd" id="7_y282l"]
+[ext_resource type="Script" uid="uid://bygie1to68dx5" path="res://scripts/ui/crucible_upgrade_popup.gd" id="5_qhh6x"]
+[ext_resource type="Script" uid="uid://bgq4wivjcuh04" path="res://scripts/ui/DevPopup.gd" id="7_y282l"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q8k43"]
 bg_color = Color(0.69135684, 0.6913568, 0.6913567, 1)
