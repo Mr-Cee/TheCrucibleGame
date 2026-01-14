@@ -3,6 +3,10 @@ class_name PlayerModel
 
 enum ClassId { WARRIOR, MAGE, ARCHER }
 
+signal leveled_up(levels_gained: int)
+
+
+# ============ General Player Vars ========================
 @export var character_name: String = ""
 @export var class_id: int = ClassId.WARRIOR
 @export var level: int = 1
@@ -10,18 +14,7 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 @export var gold: int = 0
 @export var crystals: int = 0
 @export var diamonds: int = 0
-
 @export var time_vouchers: int = 0
-
-@export var skill_tickets: int = 0
-@export var skill_gen_level: int = 1
-@export var skill_gen_xp: int = 0
-@export var skill_ad_draws_used_today: int = 0
-@export var skill_ad_draws_day_key: int = 0
-
-@export var crucible_keys: int = 10
-@export var crucible_level: int = 1
-
 @export var equipped := {
 	Catalog.GearSlot.WEAPON: null,
 	Catalog.GearSlot.HELMET: null,
@@ -36,18 +29,31 @@ enum ClassId { WARRIOR, MAGE, ARCHER }
 	Catalog.GearSlot.MOUNT: null,
 	Catalog.GearSlot.ARTIFACT: null,
 }
-
 @export var deferred_gear: Array[Dictionary] = []
 
+
+# =============== Skill Generator ====================
+@export var skill_tickets: int = 0
+@export var skill_gen_level: int = 1
+@export var skill_gen_xp: int = 0
+@export var skill_ad_draws_used_today: int = 0
+@export var skill_ad_draws_day_key: int = 0
+
+# =============== Crucible =======================
 @export var crucible_batch: int = 1
 @export var crucible_rarity_min: int = Catalog.Rarity.COMMON
 @export var crucible_auto_sell_below: bool = true
-
-@export var last_active_unix: int = 0
+@export var crucible_keys: int = 10
+@export var crucible_level: int = 1
+# Crucible upgrade persistence
+var crucible_upgrade_paid_stages: int = 0
+var crucible_upgrade_target_level: int = 0 # 0 means "not upgrading"
+var crucible_upgrade_finish_unix: int = 0  # unix seconds; 0 means "no timer running"
 
 # ============== Unlocks ==================
 @export var premium_offline_unlocked: bool = false          # permanent bundle (+2h cap)
 @export var battlepass_expires_unix: int = 0                # temporary (+2h cap while active)
+@export var last_active_unix: int = 0
 
 # ============== Class / Skills (MVP) ==================
 # Tracks the player's selected node in the class tree (e.g. "warrior", "knight", etc.)
@@ -59,10 +65,10 @@ const ACTIVE_SKILL_SLOTS: int = 5
 @export var skill_levels: Dictionary = {}               # skill_id -> level (int)
 @export var skill_progress: Dictionary = {}              # skill_id -> int copies toward next level
 
-# Crucible upgrade persistence
-var crucible_upgrade_paid_stages: int = 0
-var crucible_upgrade_target_level: int = 0 # 0 means "not upgrading"
-var crucible_upgrade_finish_unix: int = 0  # unix seconds; 0 means "no timer running"
+# ====================== Tasks ==========================
+var task_state: Dictionary = {}
+
+
 
 func base_stats() -> Stats:
 	var s := Stats.new()
@@ -170,6 +176,7 @@ func to_dict() -> Dictionary:
 		#Unlocks
 		"premium_offline_unlocked": premium_offline_unlocked,
 		"battlepass_expires_unix": battlepass_expires_unix,
+		"task_state": task_state,
 		
 
 	}
@@ -227,6 +234,7 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.skill_ad_draws_day_key = int(d.get("skill_ad_draws_day_key", 0))
 	p.ensure_skill_generator_initialized()
 
+	p.task_state = d.get("task_state", {})
 
 
 	var dg: Variant = d.get("deferred_gear", [])
@@ -278,7 +286,11 @@ func add_xp(amount: int) -> int:
 		level += 1
 		levels_gained += 1
 
+	if levels_gained > 0:
+		leveled_up.emit(levels_gained)
+
 	return levels_gained
+
 
 func battlepass_active(now_unix: int) -> bool:
 	return battlepass_expires_unix > now_unix
@@ -517,3 +529,14 @@ func add_skill_generator_xp(amount: int) -> int:
 		skill_gen_level += 1
 		gained += 1
 	return gained
+
+func add_task_reward(kind: int, amount: int) -> void:
+	match kind:
+		RewardDef.Kind.CRUCIBLE_KEYS:
+			crucible_keys += amount
+		RewardDef.Kind.TIME_VOUCHERS:
+			time_vouchers += amount
+		RewardDef.Kind.SKILL_TICKETS:
+			skill_tickets += amount
+		RewardDef.Kind.CRYSTALS:
+			crystals += amount

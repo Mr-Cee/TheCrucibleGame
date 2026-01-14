@@ -31,11 +31,19 @@ var _log_pinned_to_bottom: bool = true
 var _log_programmatic_scroll: bool = false
 const LOG_PIN_THRESHOLD_PX: float = 80.0
 
+var _task_overlay: CanvasLayer
+var _task_root: Control
+var _task_panel: Control
+var _task_reposition_queued: bool = false
+
+
 var _ui_accum: float = 0.0
 
 func _ready() -> void:
 	_apply_labels()
 	_ensure_skills_row_ui()
+	_ensure_task_panel_overlay()
+
 
 	# --- Combat log setup ---
 	combat_log.bbcode_enabled = true
@@ -89,6 +97,23 @@ func _ready() -> void:
 
 	_rebuild_log_from_game()
 	_scroll_log_to_bottom()
+	
+	#var tp := preload("res://scripts/systems/Tasks/TaskPanel.gd").new()
+	#tp.name = "TaskPanel"
+#
+	## Anchor bottom-left
+	#tp.anchor_left = 0.0
+	#tp.anchor_right = 0.0
+	#tp.anchor_top = 1.0
+	#tp.anchor_bottom = 1.0
+#
+	## Position/size (tune as you like)
+	#tp.offset_left = 16
+	#tp.offset_right = 16 + 280
+	#tp.offset_top = -60
+	#tp.offset_bottom = -16
+#
+	#add_child(tp)
 
 func _process(delta: float) -> void:
 	_ui_accum += delta
@@ -363,3 +388,83 @@ func _on_log_scroll_value_changed(_v: float) -> void:
 	var bottom: float = max(0.0, float(bar.max_value) - page)
 	var threshold: float = max(LOG_PIN_THRESHOLD_PX, float(bar.page) * 0.05)
 	_log_pinned_to_bottom = (float(bar.value) >= (bottom - threshold))
+
+func _ensure_task_panel_overlay() -> void:
+	# Create overlay once
+	if _task_overlay == null:
+		_task_overlay = CanvasLayer.new()
+		_task_overlay.name = "TaskOverlay"
+		_task_overlay.layer = 1
+		add_child(_task_overlay)
+
+	if _task_root == null:
+		_task_root = Control.new()
+		_task_root.name = "Root"
+		_task_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_task_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_task_root.offset_left = 0
+		_task_root.offset_top = 0
+		_task_root.offset_right = 0
+		_task_root.offset_bottom = 0
+		_task_overlay.add_child(_task_root)
+
+	if _task_panel == null:
+		_task_panel = (preload("res://scripts/systems/Tasks/TaskPanel.gd").new() as Control)
+		_task_panel.name = "TaskPanel"
+		_task_root.add_child(_task_panel)
+
+		# We will position via offsets; keep it top-left anchored
+		_task_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+
+	# Reposition after layout has run
+	_queue_task_panel_reposition()
+
+	# Reposition on screen resize
+	var vp := get_viewport()
+	if vp != null and not vp.size_changed.is_connected(_queue_task_panel_reposition):
+		vp.size_changed.connect(_queue_task_panel_reposition)
+
+	# Reposition if the skills row layout changes
+	if skills_row != null and not skills_row.resized.is_connected(_queue_task_panel_reposition):
+		skills_row.resized.connect(_queue_task_panel_reposition)
+
+func _queue_task_panel_reposition() -> void:
+	if _task_reposition_queued:
+		return
+	_task_reposition_queued = true
+	call_deferred("_reposition_task_panel")
+
+func _reposition_task_panel() -> void:
+	_task_reposition_queued = false
+
+	if _task_panel == null or skills_row == null:
+		return
+
+	# If layout isn't ready yet, try again next frame
+	var sr := skills_row.get_global_rect()
+	if sr.size == Vector2.ZERO:
+		_queue_task_panel_reposition()
+		return
+
+	var margin: float = 8.0
+	var min_x: float = 16.0
+
+	# Use the panel's minimum size (TaskPanel.gd should set custom_minimum_size)
+	var ps := _task_panel.get_combined_minimum_size()
+	if ps == Vector2.ZERO:
+		ps = Vector2(320, 48) # fallback only if minimum size isn't set
+
+	# Align with the skills row on X (but keep a minimum left margin)
+	var x: float = maxf(min_x, sr.position.x)
+
+	# Place ABOVE the skills row
+	var y: float = sr.position.y - ps.y - margin
+
+	# If that would go off-screen, fall back to BELOW the skills row
+	if y < margin:
+		y = sr.position.y + sr.size.y + margin
+
+	_task_panel.offset_left = x
+	_task_panel.offset_right = x + ps.x
+	_task_panel.offset_top = y
+	_task_panel.offset_bottom = y + ps.y

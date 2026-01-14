@@ -321,6 +321,7 @@ func _execute_draw() -> void:
 		if sid == "":
 			continue
 		awarded.append(sid)
+		get_node("/root/Game").task_system.notify_skill_drawn(1)
 		# Add one copy (progress)
 		if Game.player.has_method("add_skill_copies"):
 			Game.player.call("add_skill_copies", sid, 1)

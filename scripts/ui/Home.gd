@@ -127,8 +127,9 @@ var _rename_status: Label = null
 var _rename_confirm: Button = null
 
 func _on_skills_pressed() -> void:
-	var panel := SkillsPanel.new()
-	add_child(panel)
+	var p := SkillsPanel.new()
+	Game.popup_root().add_child(p)
+
 	
 func _refresh_skill_buttons() -> void:
 	for i in range(5):
@@ -464,6 +465,10 @@ func _on_crucible_draw_pressed() -> void:
 	if spent <= 0:
 		Game.inventory_event.emit("No keys available.")
 		return
+		
+	if "task_system" in Game and Game.task_system != null:
+		Game.task_system.notify_crucible_drawn(spent)
+
 
 	# Generate all items and queue them for decisions
 	var to_queue: Array[GearItem] = []
@@ -500,6 +505,10 @@ func _run_batch_draw(batch: int, token: int) -> void:
 		Game.inventory_event.emit("Auto stopped: no keys.")
 		_stop_auto_draw()
 		return
+		
+	if "task_system" in Game and Game.task_system != null:
+		Game.task_system.notify_crucible_drawn(spent)
+
 
 	# Generate items immediately; enqueue ONLY the ones we intend to show.
 	var to_queue: Array[GearItem] = []
@@ -1539,3 +1548,12 @@ func _rename_validate() -> void:
 	# Placeholder for server uniqueness validation/reservation goes here.
 	_rename_status.text = ""
 	_rename_confirm.disabled = false
+
+func _popup_layer() -> CanvasLayer:
+	var layer := get_node_or_null("PopupLayer") as CanvasLayer
+	if layer == null:
+		layer = CanvasLayer.new()
+		layer.name = "PopupLayer"
+		layer.layer = 20
+		add_child(layer)
+	return layer

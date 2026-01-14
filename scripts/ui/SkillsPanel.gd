@@ -288,7 +288,8 @@ func _build() -> void:
 		if p.has_signal("closed"):
 			p.connect("closed", Callable(self, "refresh_ui"))
 
-		get_tree().root.add_child(p)
+		Game.popup_root().add_child(p)
+
 	)
 	footer.add_child(gen)
 

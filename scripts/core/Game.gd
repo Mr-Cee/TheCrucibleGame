@@ -86,6 +86,9 @@ var _skill_queue: Array[int] = []
 var _skill_lock: float = 0.0
 const AGG_FLUSH_INTERVAL: float = 0.35
 
+var task_system: TaskSystem
+
+
 #===================================================================================================
 
 const TIME_VOUCHER_SECONDS: int = 5 * 60 # 5 minutes
@@ -96,9 +99,16 @@ func _ready() -> void:
 	SaveManager.load_or_new()
 	SaveManager.init_autosave_hooks()
 	
+	if player != null and not player.leveled_up.is_connected(_on_player_leveled_up):
+		player.leveled_up.connect(_on_player_leveled_up)
+	
 	player_changed.connect(_battle_on_player_changed)
 
 	_battle_init_if_needed()
+	
+	task_system = TaskSystem.new()
+	add_child(task_system)
+	task_system.setup(player)
 
 	
 	crucible_tick_upgrade_completion()
@@ -114,6 +124,10 @@ func _process(delta: float) -> void:
 func add_gold(amount:int) -> void:
 	player.gold += amount
 	emit_signal("player_changed")
+
+func _on_player_leveled_up(levels_gained: int) -> void:
+	if "task_system" in self and task_system != null:
+		task_system.notify_level_up(levels_gained)
 
 func add_battle_rewards(gold_amount: int, key_amount: int) -> void:
 	if gold_amount != 0:
@@ -843,7 +857,6 @@ func _battle_player_attack() -> void:
 
 		log_combat("player", sev, "[color=#7CFF7C]You[/color] hit for [b]%d[/b]%s" % [int(round(dealt)), tag_txt])
 
-
 func _battle_enemy_attack() -> void:
 	var dmg: float = _e_atk * _enemy_atk_mult()
 
@@ -925,6 +938,9 @@ func _battle_on_enemy_defeated() -> void:
 				key_gain
 			]
 		)
+		
+	get_node("/root/Game").task_system.notify_enemy_killed(1)
+
 	# Advance progression using Catalog (tunable)
 	var next: Dictionary = Catalog.battle_advance_progression(diff, lvl, stg, wav)
 	
@@ -1271,3 +1287,27 @@ func apply_offline_rewards_on_load() -> Dictionary:
 		"xp": xp_gain,
 		"levels": levels,
 	}
+
+func popup_root() -> Control:
+	var root := get_tree().root
+
+	var layer := root.get_node_or_null("PopupLayer") as CanvasLayer
+	if layer == null:
+		layer = CanvasLayer.new()
+		layer.name = "PopupLayer"
+		layer.layer = 20
+		root.add_child(layer)
+
+	var ui := layer.get_node_or_null("Root") as Control
+	if ui == null:
+		ui = Control.new()
+		ui.name = "Root"
+		ui.set_anchors_preset(Control.PRESET_FULL_RECT)
+		ui.offset_left = 0
+		ui.offset_top = 0
+		ui.offset_right = 0
+		ui.offset_bottom = 0
+		ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(ui)
+
+	return ui

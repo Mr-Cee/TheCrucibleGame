@@ -26,6 +26,7 @@ func roll_item_for_player(p: PlayerModel) -> GearItem:
 	item.rarity = roll_rarity_for_level(p.crucible_level)
 
 	item.stats = _roll_stats(item.slot, item.item_level, item.rarity, p.class_id)
+	
 	return item
 
 func roll_rarity_for_level(crucible_level: int) -> int:
