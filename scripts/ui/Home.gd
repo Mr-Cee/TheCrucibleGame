@@ -150,8 +150,6 @@ func _refresh_skill_buttons() -> void:
 		else:
 			btn.text = name
 			btn.disabled = false
-
-
 #-------------------------------------------------------------------------
 
 func _ready() -> void:
@@ -874,7 +872,8 @@ func _maybe_prompt_class_selection() -> void:
 	_class_select_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_class_select_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_class_select_overlay.focus_mode = Control.FOCUS_ALL
-	add_child(_class_select_overlay)
+	#add_child(_class_select_overlay)
+	Game.popup_root().add_child(_class_select_overlay)
 	_class_select_overlay.grab_focus()
 
 	# Dim background
@@ -998,8 +997,10 @@ func _choose_class(class_id: int) -> void:
 	# If your skills/class framework exists, reset and seed it for the chosen base class.
 	# (This prevents “carrying” warrior starter skills into mage, etc.)
 	if Game.player.has_method("ensure_class_and_skills_initialized"):
-		if "class_def_id" in Game.player: # (If you have it as a property; safe to remove if not needed)
-			Game.player.class_def_id = ""
+		if "class_def_id" in Game.player:
+			var base_def: ClassDef = ClassCatalog.base_def_for_class_id(class_id)
+			Game.player.class_def_id = base_def.id if base_def != null else ""
+
 		# These properties exist in your skill framework—leave if present in your project.
 		if Game.player.has_method("set"): # always true, but harmless
 			# If these properties exist, clearing them forces reseed.
@@ -1104,7 +1105,8 @@ func _show_advanced_class_popup(current_name: String, required_level: int, choic
 	_class_select_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_class_select_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	_class_select_overlay.focus_mode = Control.FOCUS_ALL
-	add_child(_class_select_overlay)
+	#add_child(_class_select_overlay)
+	Game.popup_root().add_child(_class_select_overlay)
 	_class_select_overlay.grab_focus()
 
 	var dim := ColorRect.new()

@@ -104,7 +104,12 @@ func _ready() -> void:
 	
 	player_changed.connect(_battle_on_player_changed)
 
-	_battle_init_if_needed()
+	if has_selected_class():
+		_battle_init_if_needed()
+	else:
+		battle_runtime["status_text"] = "Choose a class to begin."
+		battle_changed.emit()
+
 	
 	task_system = TaskSystem.new()
 	add_child(task_system)
@@ -118,8 +123,24 @@ func _process(delta: float) -> void:
 	if _upgrade_check_accum >= 1.0:
 		_upgrade_check_accum = 0.0
 		crucible_tick_upgrade_completion()
-	_battle_init_if_needed()
-	_battle_process(delta)
+	if has_selected_class():
+		_battle_init_if_needed()
+		_battle_process(delta)
+	else:
+		# Do not advance combat at all until class is selected.
+		pass
+
+
+func has_selected_class() -> bool:
+	return player != null and int(player.class_id) >= 0
+
+func set_player_class(new_class_id: int, new_class_def_id: String = "") -> void:
+	if player == null:
+		return
+	player.class_id = new_class_id
+	if new_class_def_id != "" and "class_def_id" in player:
+		player.class_def_id = new_class_def_id
+	player_changed.emit()
 
 func add_gold(amount:int) -> void:
 	player.gold += amount
@@ -351,6 +372,9 @@ func _battle_init_if_needed() -> void:
 		return
 	if player == null:
 		return
+	if not has_selected_class():
+		return
+
 
 	_battle_inited = true
 	_skills_ensure_player_initialized()
@@ -364,10 +388,22 @@ func _battle_init_if_needed() -> void:
 	_battle_spawn_enemy(true)
 
 func _battle_on_player_changed() -> void:
+	if player == null:
+		return
+
+	# Still in class selection state; don't run combat math.
+	if not has_selected_class():
+		battle_runtime["status_text"] = "Choose a class to begin."
+		battle_changed.emit()
+		return
+
+	# If class was just chosen, initialize combat now.
+	if not _battle_inited:
+		_battle_init_if_needed()
+
 	# Gear/level changes should immediately affect combat.
 	_battle_recompute_player_combat()
 
-	# If we have no HP set yet, initialize.
 	if float(battle_runtime.get("player_hp_max", 0.0)) <= 0.0:
 		battle_runtime["player_hp_max"] = _p_hp_max
 		battle_runtime["player_hp"] = _p_hp_max
@@ -1080,6 +1116,36 @@ func _battle_advance_progression() -> void:
 	battle_state["stage"] = int(next["stage"])
 	battle_state["wave"] = int(next["wave"])
 
+# -----------------------------------------------------------------------------------------------
+# Dev helpers
+# -----------------------------------------------------------------------------------------------
+
+# Sets the player's character level directly (dev tools).
+# If reset_xp is true, XP is cleared so the player is exactly at the requested level.
+func dev_set_character_level(target_level: int, reset_xp: bool = true) -> void:
+	if player == null:
+		return
+
+	var lvl: int = maxi(1, target_level)
+	player.level = lvl
+	if reset_xp:
+		player.xp = 0
+
+	# Keep downstream systems stable (skills arrays, etc.).
+	if player.has_method("ensure_class_and_skills_initialized"):
+		player.ensure_class_and_skills_initialized()
+
+	# Refresh UI/battle.
+	player_changed.emit()
+
+	# If the current tutorial task is "level up to X", sync its display immediately.
+	if task_system != null:
+		task_system.notify_level_up(1)
+
+	# Persist quickly when using dev tools (if you have this hook).
+	if has_method("request_save"):
+		call("request_save")
+
 func dev_set_battle_position(diff: String, level: int, stage: int, wave: int) -> void:
 	patch_battle_state({
 		"difficulty": diff,
@@ -1275,6 +1341,8 @@ func apply_offline_rewards_on_load() -> Dictionary:
 
 	inventory_event.emit(
 		"Offline (%s): +%d gold, +%d keys, +%d XP" % [_fmt_duration_short(capped), gold_gain, key_gain, xp_gain]
+	)
+	print("Offline (%s): +%d gold, +%d keys, +%d XP" % [_fmt_duration_short(capped), gold_gain, key_gain, xp_gain]
 	)
 	if levels > 0:
 		inventory_event.emit("Level Up! Lv.%d" % player.level)

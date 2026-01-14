@@ -357,7 +357,49 @@ func ensure_active_skills_initialized() -> void:
 
 # For compatibility with Home.gd's existing call
 func ensure_class_and_skills_initialized() -> void:
+	# Always ensure containers exist / sized correctly
 	ensure_active_skills_initialized()
+
+	# If class not chosen yet, don't force a class_def_id
+	if int(class_id) < 0:
+		return
+
+	# Ensure class_def_id exists (required for advanced class milestones)
+	if class_def_id == "":
+		var base_def: ClassDef = ClassCatalog.base_def_for_class_id(int(class_id))
+		if base_def != null:
+			class_def_id = base_def.id
+
+	# Seed starter skills if none are unlocked
+	var any_unlocked := false
+	for sid in SkillCatalog.all_active_ids():
+		if int(skill_levels.get(sid, 0)) > 0:
+			any_unlocked = true
+			break
+
+	if not any_unlocked:
+		var seed: Dictionary = SkillCatalog.starting_skill_levels_for_class(int(class_id))
+		for sid in seed.keys():
+			skill_levels[sid] = int(seed[sid])
+
+	# Seed starter loadout if nothing is equipped
+	var has_equipped := false
+	for s in equipped_active_skills:
+		if String(s) != "":
+			has_equipped = true
+			break
+		if not has_equipped:
+			equipped_active_skills = SkillCatalog.starting_active_loadout_for_class(int(class_id))
+
+	# Seed passives if needed
+	if equipped_passive_skills == null:
+		equipped_passive_skills = []
+	if equipped_passive_skills.is_empty():
+		equipped_passive_skills = SkillCatalog.starting_passives_for_class(int(class_id))
+
+	# Re-sanitize equipped lists after seeding
+	ensure_active_skills_initialized()
+
 
 func set_skill_level(skill_id: String, lvl: int) -> void:
 	if skill_id == "":
