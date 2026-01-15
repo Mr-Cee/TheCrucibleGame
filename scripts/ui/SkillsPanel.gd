@@ -293,6 +293,14 @@ func _build() -> void:
 	)
 	footer.add_child(gen)
 
+	var passives_btn := Button.new()
+	passives_btn.text = "Passives"
+	passives_btn.pressed.connect(func() -> void:
+		var pp := PassivesPanel.new()
+		Game.popup_root().add_child(pp)
+	)
+	footer.add_child(passives_btn)
+
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	footer.add_child(spacer)

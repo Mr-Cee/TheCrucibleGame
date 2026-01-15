@@ -59,6 +59,7 @@ extends Control
 @onready var dev_popup: Window = $DevPopup
 
 @onready var skills_button: Button = $RootMargin/RootVBox/TownNav/TownNavRow/SkillsBtn
+#@onready var passive_test_btn: Button = $RootMargin/RootVBox/TownNav/TownNavRow/PassiveTest
 
 
 
@@ -165,6 +166,11 @@ func _ready() -> void:
 	$RootMargin/RootVBox/BattleSection/SkillsRow/AutoSkillsToggle.toggled.connect(func(v: bool) -> void:
 		Game.set_skills_auto_enabled(v)
 	)
+	
+	#passive_test_btn.pressed.connect(func() -> void:
+		#var p := PassivesPanel.new()
+		#Game.popup_root().add_child(p)
+#)
 
 
 	if cp_label:
