@@ -43,7 +43,11 @@ var _enemies_grid: GridContainer = null
 var _enemy_squares: Array[Control] = []
 var _last_enemy_count: int = -1
 
-const ENEMY_TEX := preload("res://assets/enemies/enemy_goblin.png")
+const ENEMY_DIR := "res://assets/enemies"
+const ENEMY_FALLBACK := preload("res://assets/enemies/enemy_goblin.png")
+
+var _enemy_textures: Array[Texture2D] = []
+
 var _enemy_prev_alive: Array[bool] = []
 
 
@@ -503,25 +507,57 @@ func _rebuild_enemy_squares(count: int) -> void:
 		c.queue_free()
 	_enemy_squares.clear()
 	_enemy_prev_alive.clear()
+	
+	if _enemy_textures.is_empty():
+		_load_enemy_textures()
 
 	for i in range(count):
-		var r := TextureRect.new()
-		r.texture = ENEMY_TEX
-		r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		r.custom_minimum_size = Vector2(96, 96)
-		r.size = Vector2(64, 64)
-		r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		# Cell holds HP bar + sprite
+		var cell := VBoxContainer.new()
+		cell.name = "EnemyCell_%d" % i
+		cell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		cell.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		cell.add_theme_constant_override("separation", 2)
 
+		# --- HP bar (background + fill) ---
+		var hp_bar := Control.new()
+		hp_bar.name = "HPBar"
+		hp_bar.custom_minimum_size = Vector2(48, 6)
+		hp_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		hp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
-		# If your battlefield row is tall, this keeps them centered vertically.
-		r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var bg := ColorRect.new()
+		bg.name = "BG"
+		bg.color = Color(0, 0, 0, 0.55)
+		bg.anchor_right = 1.0
+		bg.anchor_bottom = 1.0
+		hp_bar.add_child(bg)
 
-		# Ensure fully visible at spawn
-		r.modulate = Color(1, 1, 1, 1)
-		r.self_modulate = Color(1, 1, 1, 1)
+		var fg := ColorRect.new()
+		fg.name = "FG"
+		fg.color = Color(0.2, 0.9, 0.3, 1.0)
+		fg.anchor_bottom = 1.0
+		fg.anchor_right = 0.0 # we drive width via offset_right
+		fg.offset_right = hp_bar.custom_minimum_size.x
+		hp_bar.add_child(fg)
 
-		_enemies_grid.add_child(r)
-		_enemy_squares.append(r)
+		cell.add_child(hp_bar)
+
+		# --- Enemy sprite ---
+		var spr := TextureRect.new()
+		spr.name = "Sprite"
+		spr.texture = _enemy_textures.pick_random()
+		spr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		spr.custom_minimum_size = Vector2(96, 96)
+		spr.size = Vector2(32, 32)
+		spr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		spr.modulate = Color(1, 1, 1, 1)
+		spr.self_modulate = Color(1, 1, 1, 1)
+
+		cell.add_child(spr)
+
+		_enemies_grid.add_child(cell)
+		_enemy_squares.append(cell)
 		_enemy_prev_alive.append(true)
 
 func _apply_battlefield_ui() -> void:
@@ -541,7 +577,7 @@ func _apply_battlefield_ui() -> void:
 
 	var need_rebuild := _enemy_squares.size() != enemies.size()
 	if not need_rebuild and _enemy_squares.size() > 0:
-		need_rebuild = not (_enemy_squares[0] is TextureRect)
+		need_rebuild = not (_enemy_squares[0].has_node("HPBar"))
 
 	if need_rebuild:
 		_rebuild_enemy_squares(enemies.size())
@@ -562,7 +598,7 @@ func _apply_battlefield_ui() -> void:
 
 
 		# HP % as transparency cue (pure placeholder)
-		rect.modulate.a = 0.30 + 0.70 * pct
+		#rect.modulate.a = 0.30 + 0.70 * pct
 
 func _reposition_task_panel() -> void:
 	_task_reposition_queued = false
@@ -607,38 +643,62 @@ func _sync_enemy_sprites(enemies: Array[Dictionary], target_idx: int) -> void:
 			_enemy_prev_alive[i] = true
 
 	for i in range(_enemy_squares.size()):
-		var sq := _enemy_squares[i] as TextureRect
+		var cell := _enemy_squares[i]
 		if i >= enemies.size():
-			sq.visible = false
+			cell.visible = false
 			continue
 
-		sq.visible = true
+		cell.visible = true
 
 		var hp: float = float(enemies[i].get("hp", 0.0))
+		var hp_max: float = maxf(1.0, float(enemies[i].get("hp_max", 1.0)))
+		var pct: float = clampf(hp / hp_max, 0.0, 1.0)
 		var alive: bool = hp > 0.0
+		
+		# If already fully faded and still dead, keep hidden.
+		if not alive and cell.has_meta("dead_hidden") and bool(cell.get_meta("dead_hidden")):
+			cell.visible = false
+			continue
 
-		# Highlight current target (tint)
-		if alive and i == target_idx:
-			sq.self_modulate = Color(1.0, 0.9, 0.6, 1.0)
-		else:
-			sq.self_modulate = Color(1.0, 1.0, 1.0, 1.0)
+		# If alive (new wave/reused slot), ensure it's visible again.
+		if alive and cell.has_meta("dead_hidden") and bool(cell.get_meta("dead_hidden")):
+			cell.set_meta("dead_hidden", false)
+			cell.visible = true
+			cell.modulate = Color(1, 1, 1, 1)
 
-		# Fade out once when transitioning alive -> dead
+
+		var spr := cell.get_node("Sprite") as TextureRect
+		var hp_bar := cell.get_node("HPBar") as Control
+		var fg := hp_bar.get_node("FG") as ColorRect
+
+		# Update bar fill width
+		var w := maxf(hp_bar.size.x, hp_bar.custom_minimum_size.x)
+		fg.offset_right = w * pct
+
+		## Target highlight tint (sprite only)
+		#if alive and i == target_idx:
+			#spr.self_modulate = Color(1.0, 0.9, 0.6, 1.0)
+		#else:
+			#spr.self_modulate = Color(1.0, 1.0, 1.0, 1.0)
+
+		# Fade out once when transitioning alive -> dead (fade the whole cell)
 		var was_alive := _enemy_prev_alive[i]
 		if was_alive and not alive:
-			_fade_out_enemy_sprite(sq)
+			_fade_out_enemy_sprite(cell)
 
-		# If alive (or respawned due to rebuild), ensure visible
-		if alive and sq.modulate.a < 0.99:
-			sq.modulate = Color(1, 1, 1, 1)
+		## If alive (or rebuilt), ensure visible alpha
+		#if alive and cell.modulate.a < 0.99:
+			#cell.modulate = Color(1, 1, 1, 1)
 
 		_enemy_prev_alive[i] = alive
 
 func _fade_out_enemy_sprite(sq: CanvasItem) -> void:
-	# Prevent double-tweening
+	# Prevent double-tweening.
 	if sq.has_meta("fading") and bool(sq.get_meta("fading")):
 		return
 	sq.set_meta("fading", true)
+	sq.set_meta("dead_hidden", false)
+	sq.visible = true
 
 	var t := create_tween()
 	t.tween_property(sq, "modulate:a", 0.0, 0.35) \
@@ -646,5 +706,34 @@ func _fade_out_enemy_sprite(sq: CanvasItem) -> void:
 		.set_ease(Tween.EASE_IN_OUT)
 
 	t.finished.connect(func():
+		# Hard-finalize the death: completely hidden.
+		sq.modulate.a = 0.0
+		sq.visible = false
+		sq.set_meta("dead_hidden", true)
 		sq.set_meta("fading", false)
 	)
+
+func _load_enemy_textures() -> void:
+	_enemy_textures.clear()
+
+	var dir := DirAccess.open(ENEMY_DIR)
+	if dir == null:
+		_enemy_textures.append(ENEMY_FALLBACK)
+		return
+
+	dir.list_dir_begin()
+	var fn := dir.get_next()
+	while fn != "":
+		if not dir.current_is_dir():
+			var low := fn.to_lower()
+			# Ignore .import and only load .png
+			if low.ends_with(".png") and not low.ends_with(".png.import"):
+				var path := "%s/%s" % [ENEMY_DIR, fn]
+				var res := ResourceLoader.load(path)
+				if res is Texture2D:
+					_enemy_textures.append(res)
+		fn = dir.get_next()
+	dir.list_dir_end()
+
+	if _enemy_textures.is_empty():
+		_enemy_textures.append(ENEMY_FALLBACK)
