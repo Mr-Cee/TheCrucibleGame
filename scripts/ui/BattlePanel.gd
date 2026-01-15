@@ -36,6 +36,12 @@ var _task_root: Control
 var _task_panel: Control
 var _task_reposition_queued: bool = false
 
+# Placeholder battlefield visuals (player + enemy squares)
+var _battlefield_row: HBoxContainer = null
+var _player_square: ColorRect = null
+var _enemies_grid: GridContainer = null
+var _enemy_squares: Array[ColorRect] = []
+var _last_enemy_count: int = -1
 
 var _ui_accum: float = 0.0
 
@@ -43,6 +49,7 @@ func _ready() -> void:
 	_apply_labels()
 	_ensure_skills_row_ui()
 	_ensure_task_panel_overlay()
+	_ensure_battlefield_ui()
 
 
 	# --- Combat log setup ---
@@ -128,6 +135,7 @@ func _process(delta: float) -> void:
 
 	_apply_labels()
 	_apply_enemy_hp()
+	_apply_battlefield_ui()
 	_apply_skill_row()
 
 func _apply_labels() -> void:
@@ -433,6 +441,114 @@ func _queue_task_panel_reposition() -> void:
 		return
 	_task_reposition_queued = true
 	call_deferred("_reposition_task_panel")
+
+func _ensure_battlefield_ui() -> void:
+	# Create a simple row of squares for player + enemies. Insert under combat log.
+	if _battlefield_row != null:
+		return
+
+	_battlefield_row = HBoxContainer.new()
+	_battlefield_row.name = "BattlefieldRow"
+	_battlefield_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_battlefield_row.add_theme_constant_override("separation", 12)
+	
+	_battlefield_row.custom_minimum_size = Vector2(0, 275) # tweak 100–220 to taste
+	
+	# Let this row take vertical space so its contents can be centered in that gap.
+	_battlefield_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_battlefield_row.size_flags_stretch_ratio = 1.5
+
+	# For HBoxContainer, this centers children vertically within the row's height.
+	_battlefield_row.alignment = BoxContainer.ALIGNMENT_CENTER
+
+	# Player square
+	_player_square = ColorRect.new()
+	_player_square.custom_minimum_size = Vector2(32, 32)
+	_player_square.color = Color(0.2, 0.9, 0.3, 1.0)
+	_player_square.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_player_square.tooltip_text = "Player"
+	_battlefield_row.add_child(_player_square)
+	
+	# Spacer to push enemies to the right.
+	var spacer := Control.new()
+	spacer.name = "BattlefieldSpacer"
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.size_flags_stretch_ratio = 1.5
+	_battlefield_row.add_child(spacer)
+
+
+	# Enemy squares grid
+	_enemies_grid = GridContainer.new()
+	_enemies_grid.columns = 7
+	_enemies_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	#_enemies_grid.size_flags_stretch_ratio = 1.0
+	_enemies_grid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_enemies_grid.add_theme_constant_override("h_separation", 6)
+	_enemies_grid.add_theme_constant_override("v_separation", 6)
+	_battlefield_row.add_child(_enemies_grid)
+
+	# Insert just above the skills row for a "under combat log" feel.
+	var insert_before: int = get_child_count()
+	if combat_log != null:
+		insert_before = combat_log.get_index() + 4
+	add_child(_battlefield_row)
+	move_child(_battlefield_row, insert_before)
+
+func _rebuild_enemy_squares(count: int) -> void:
+	for r in _enemy_squares:
+		if is_instance_valid(r):
+			r.queue_free()
+	_enemy_squares.clear()
+	_last_enemy_count = count
+
+	for i in range(count):
+		var rect := ColorRect.new()
+		rect.custom_minimum_size = Vector2(24, 24)
+		rect.color = Color(0.9, 0.2, 0.2, 1.0)
+		rect.tooltip_text = "Enemy %d" % (i + 1)
+		_enemies_grid.add_child(rect)
+		_enemy_squares.append(rect)
+
+func _apply_battlefield_ui() -> void:
+	if _battlefield_row == null:
+		return
+	if Game == null:
+		return
+
+	var enemies: Array = []
+	if Game.has_method("get_enemies_snapshot"):
+		enemies = Game.call("get_enemies_snapshot")
+	else:
+		# Backwards compatibility fallback
+		var br: Dictionary = Game.battle_runtime
+		if br.has("enemies"):
+			enemies = br["enemies"]
+
+	var count: int = enemies.size()
+	if count != _last_enemy_count:
+		_rebuild_enemy_squares(count)
+
+	# Update colors to reflect alive/target; alpha reflects HP %.
+	for i in range(_enemy_squares.size()):
+		var rect := _enemy_squares[i]
+		if rect == null:
+			continue
+		var e: Dictionary = enemies[i]
+		var hp: float = float(e.get("hp", 0.0))
+		var hm: float = max(1.0, float(e.get("hp_max", 1.0)))
+		var pct: float = clamp(hp / hm, 0.0, 1.0)
+		var alive: bool = bool(e.get("alive", hp > 0.0))
+		var is_target: bool = bool(e.get("is_target", false))
+
+		if not alive:
+			rect.color = Color(0.25, 0.25, 0.25, 1.0)
+		elif is_target:
+			rect.color = Color(1.0, 0.85, 0.25, 1.0)
+		else:
+			rect.color = Color(0.9, 0.2, 0.2, 1.0)
+
+		# HP % as transparency cue (pure placeholder)
+		rect.modulate.a = 0.30 + 0.70 * pct
 
 func _reposition_task_panel() -> void:
 	_task_reposition_queued = false
