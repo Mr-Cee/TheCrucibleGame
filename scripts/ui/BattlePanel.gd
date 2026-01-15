@@ -40,8 +40,12 @@ var _task_reposition_queued: bool = false
 var _battlefield_row: HBoxContainer = null
 var _player_square: ColorRect = null
 var _enemies_grid: GridContainer = null
-var _enemy_squares: Array[ColorRect] = []
+var _enemy_squares: Array[Control] = []
 var _last_enemy_count: int = -1
+
+const ENEMY_TEX := preload("res://assets/enemies/enemy_goblin.png")
+var _enemy_prev_alive: Array[bool] = []
+
 
 var _ui_accum: float = 0.0
 
@@ -456,7 +460,7 @@ func _ensure_battlefield_ui() -> void:
 	
 	# Let this row take vertical space so its contents can be centered in that gap.
 	_battlefield_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_battlefield_row.size_flags_stretch_ratio = 1.5
+	_battlefield_row.size_flags_stretch_ratio = 1.0
 
 	# For HBoxContainer, this centers children vertically within the row's height.
 	_battlefield_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -495,19 +499,30 @@ func _ensure_battlefield_ui() -> void:
 	move_child(_battlefield_row, insert_before)
 
 func _rebuild_enemy_squares(count: int) -> void:
-	for r in _enemy_squares:
-		if is_instance_valid(r):
-			r.queue_free()
+	for c in _enemies_grid.get_children():
+		c.queue_free()
 	_enemy_squares.clear()
-	_last_enemy_count = count
+	_enemy_prev_alive.clear()
 
 	for i in range(count):
-		var rect := ColorRect.new()
-		rect.custom_minimum_size = Vector2(24, 24)
-		rect.color = Color(0.9, 0.2, 0.2, 1.0)
-		rect.tooltip_text = "Enemy %d" % (i + 1)
-		_enemies_grid.add_child(rect)
-		_enemy_squares.append(rect)
+		var r := TextureRect.new()
+		r.texture = ENEMY_TEX
+		r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		r.custom_minimum_size = Vector2(96, 96)
+		r.size = Vector2(64, 64)
+		r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+
+
+		# If your battlefield row is tall, this keeps them centered vertically.
+		r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+		# Ensure fully visible at spawn
+		r.modulate = Color(1, 1, 1, 1)
+		r.self_modulate = Color(1, 1, 1, 1)
+
+		_enemies_grid.add_child(r)
+		_enemy_squares.append(r)
+		_enemy_prev_alive.append(true)
 
 func _apply_battlefield_ui() -> void:
 	if _battlefield_row == null:
@@ -524,9 +539,14 @@ func _apply_battlefield_ui() -> void:
 		if br.has("enemies"):
 			enemies = br["enemies"]
 
-	var count: int = enemies.size()
-	if count != _last_enemy_count:
-		_rebuild_enemy_squares(count)
+	var need_rebuild := _enemy_squares.size() != enemies.size()
+	if not need_rebuild and _enemy_squares.size() > 0:
+		need_rebuild = not (_enemy_squares[0] is TextureRect)
+
+	if need_rebuild:
+		_rebuild_enemy_squares(enemies.size())
+	
+	_sync_enemy_sprites(enemies, -1)
 
 	# Update colors to reflect alive/target; alpha reflects HP %.
 	for i in range(_enemy_squares.size()):
@@ -540,12 +560,6 @@ func _apply_battlefield_ui() -> void:
 		var alive: bool = bool(e.get("alive", hp > 0.0))
 		var is_target: bool = bool(e.get("is_target", false))
 
-		if not alive:
-			rect.color = Color(0.25, 0.25, 0.25, 1.0)
-		elif is_target:
-			rect.color = Color(1.0, 0.85, 0.25, 1.0)
-		else:
-			rect.color = Color(0.9, 0.2, 0.2, 1.0)
 
 		# HP % as transparency cue (pure placeholder)
 		rect.modulate.a = 0.30 + 0.70 * pct
@@ -584,3 +598,53 @@ func _reposition_task_panel() -> void:
 	_task_panel.offset_right = x + ps.x
 	_task_panel.offset_top = y
 	_task_panel.offset_bottom = y + ps.y
+
+func _sync_enemy_sprites(enemies: Array[Dictionary], target_idx: int) -> void:
+	# Keep tracker sized correctly
+	if _enemy_prev_alive.size() != enemies.size():
+		_enemy_prev_alive.resize(enemies.size())
+		for i in range(_enemy_prev_alive.size()):
+			_enemy_prev_alive[i] = true
+
+	for i in range(_enemy_squares.size()):
+		var sq := _enemy_squares[i] as TextureRect
+		if i >= enemies.size():
+			sq.visible = false
+			continue
+
+		sq.visible = true
+
+		var hp: float = float(enemies[i].get("hp", 0.0))
+		var alive: bool = hp > 0.0
+
+		# Highlight current target (tint)
+		if alive and i == target_idx:
+			sq.self_modulate = Color(1.0, 0.9, 0.6, 1.0)
+		else:
+			sq.self_modulate = Color(1.0, 1.0, 1.0, 1.0)
+
+		# Fade out once when transitioning alive -> dead
+		var was_alive := _enemy_prev_alive[i]
+		if was_alive and not alive:
+			_fade_out_enemy_sprite(sq)
+
+		# If alive (or respawned due to rebuild), ensure visible
+		if alive and sq.modulate.a < 0.99:
+			sq.modulate = Color(1, 1, 1, 1)
+
+		_enemy_prev_alive[i] = alive
+
+func _fade_out_enemy_sprite(sq: CanvasItem) -> void:
+	# Prevent double-tweening
+	if sq.has_meta("fading") and bool(sq.get_meta("fading")):
+		return
+	sq.set_meta("fading", true)
+
+	var t := create_tween()
+	t.tween_property(sq, "modulate:a", 0.0, 0.35) \
+		.set_trans(Tween.TRANS_SINE) \
+		.set_ease(Tween.EASE_IN_OUT)
+
+	t.finished.connect(func():
+		sq.set_meta("fading", false)
+	)
