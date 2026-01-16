@@ -127,11 +127,34 @@ var _rename_line: LineEdit = null
 var _rename_status: Label = null
 var _rename_confirm: Button = null
 
+# Crucible Art UI (replaces panel + draw button)
+@onready var crucible_row: Control = $RootMargin/RootVBox/CrucibleRow
+const CRUCIBLE_TEX := preload("res://assets/UI/crucible.png")
+const CRUCIBLE_SHEET_TEX := preload("res://assets/UI/crucible_spritesheet.png")
+const CRUCIBLE_IDLE_TEX := preload("res://assets/UI/crucible.png")
+
+const CRUCIBLE_SHEET_COLS := 5
+const CRUCIBLE_SHEET_ROWS := 5
+const CRUCIBLE_FRAME_COUNT := 24
+const CRUCIBLE_FRAME_SIZE := Vector2i(256, 256) # 1280/5
+
+const CRUCIBLE_FPS := 18.0 # tweak to taste               # animation speed
+
+var _crucible_click_frames: Array[Texture2D] = []
+var _crucible_animating: bool = false
+
+
+var _crucible_art_vbox: VBoxContainer = null
+var _crucible_art_btn: TextureButton = null
+var _crucible_keys_count_label: Label = null
+var _crucible_btn_base_scale: Vector2 = Vector2.ONE
+var _crucible_click_tween: Tween = null
+
+
 func _on_skills_pressed() -> void:
 	var p := SkillsPanel.new()
 	Game.popup_root().add_child(p)
 
-	
 func _refresh_skill_buttons() -> void:
 	for i in range(5):
 		var btn: Button = get_node("SkillBtn%d" % (i + 1))
@@ -166,13 +189,6 @@ func _ready() -> void:
 	$RootMargin/RootVBox/BattleSection/SkillsRow/AutoSkillsToggle.toggled.connect(func(v: bool) -> void:
 		Game.set_skills_auto_enabled(v)
 	)
-	
-	#passive_test_btn.pressed.connect(func() -> void:
-		#var p := PassivesPanel.new()
-		#Game.popup_root().add_child(p)
-#)
-
-
 	if cp_label:
 		cp_label.gui_input.connect(_on_cp_label_gui_input)
 
@@ -182,6 +198,10 @@ func _ready() -> void:
 		crucible_panel.connect("draw_pressed", _on_crucible_draw_pressed)
 	else:
 		push_warning("CruciblePanel has no draw_pressed signal. Is CruciblePanel.gd attached to the node?")
+	_setup_crucible_art_ui()
+	_build_crucible_click_frames()
+	_set_crucible_button_texture(CRUCIBLE_IDLE_TEX)
+
 	compare_popup.visible = false
 
 	# Connect GearStrip signal (slot clicks)
@@ -448,7 +468,12 @@ func _refresh_hud_nonbattle() -> void:
 	if "deferred_gear" in p:
 		pending = int(p.deferred_gear.size())
 
-	crucible_panel.call("set_crucible_hud", p.crucible_keys, p.crucible_level, int(p.crucible_batch), pending)
+	if is_instance_valid(crucible_panel) and crucible_panel.has_method("set_crucible_hud"):
+		crucible_panel.call("set_crucible_hud", p.crucible_keys, p.crucible_level, int(p.crucible_batch), pending)
+	
+	if is_instance_valid(_crucible_keys_count_label):
+		_crucible_keys_count_label.text = str(int(p.crucible_keys))
+
 
 func _on_crucible_draw_pressed() -> void:
 	# Manual draw stops auto
@@ -500,19 +525,35 @@ func _run_batch_draw(batch: int, token: int) -> void:
 
 	# If we already have a deferred item, resolve it first (no new keys spent).
 	if _has_deferred_item():
+		# Don’t animate/show if auto was cancelled.
+		if not _auto_running or token != _auto_cancel_token:
+			return
+		await _await_crucible_click_anim_if_possible()
+		# Re-check after awaiting animation.
+		if not _auto_running or token != _auto_cancel_token:
+			return
 		await _show_compare_and_wait(_peek_deferred_item(), true)
 		return
 
 	# Spend the whole batch up front.
+	if not _auto_running or token != _auto_cancel_token:
+		return
+
 	var spent: int = Game.spend_crucible_keys(batch)
 	if spent <= 0:
 		Game.inventory_event.emit("Auto stopped: no keys.")
 		_stop_auto_draw()
 		return
 		
+	# Always animate the crucible for an auto batch, even if no compare window will appear.
+	if not _auto_running or token != _auto_cancel_token:
+		return
+	await _await_crucible_click_anim_if_possible()
+	if not _auto_running or token != _auto_cancel_token:
+		return
+
 	if "task_system" in Game and Game.task_system != null:
 		Game.task_system.notify_crucible_drawn(spent)
-
 
 	# Generate items immediately; enqueue ONLY the ones we intend to show.
 	var to_queue: Array[GearItem] = []
@@ -533,22 +574,24 @@ func _run_batch_draw(batch: int, token: int) -> void:
 		var meets: bool = _rarity_meets_threshold(item.rarity, min_rarity)
 
 		if meets:
-			# Meets filter: show/decide
 			to_queue.append(item)
 		else:
 			# Below filter: never show when a filter is active.
-			# If auto-sell: sell; otherwise silently skip (discard)
+			# If auto-sell: sell; otherwise silently skip (discard).
 			if auto_sell:
 				Game.sell_item(item)
-			# else: do nothing (silently ignore)
 
 	# Enqueue all decision items.
 	if to_queue.size() > 0:
 		_enqueue_deferred_many(to_queue)
 
 	# Present the next deferred item (if any), and wait for a decision.
-	if _has_deferred_item() and _auto_running and token == _auto_cancel_token:
+	if _has_deferred_item():
+		if not _auto_running or token != _auto_cancel_token:
+			return
 		await _show_compare_and_wait(_peek_deferred_item(), true)
+
+
 
 func _run_auto_loop(token: int) -> void:
 	# Continuous auto: keep drawing batches until stopped or out of keys.
@@ -689,11 +732,12 @@ func _start_auto_draw() -> void:
 
 	var token := _auto_cancel_token
 
-	# If there is a deferred item, resolve it first (auto stays ON unless user stops it).
 	if _has_deferred_item():
+		await _await_crucible_click_anim_if_possible()
 		await _show_compare_and_wait(_peek_deferred_item(), true)
 		if not _auto_running or token != _auto_cancel_token:
 			return
+
 
 	_run_auto_loop(token) # fire-and-forget (async)
 
@@ -1565,3 +1609,119 @@ func _popup_layer() -> CanvasLayer:
 		layer.layer = 20
 		add_child(layer)
 	return layer
+
+# ----------------------- Crucible Art UI------------------------------------------------------
+
+func _setup_crucible_art_ui() -> void:
+	if _crucible_art_vbox != null:
+		return
+
+	# Hide the legacy crucible panel (and its draw button/batch text).
+	if is_instance_valid(crucible_panel):
+		crucible_panel.visible = false
+
+	_crucible_art_vbox = VBoxContainer.new()
+	_crucible_art_vbox.name = "CrucibleArtVBox"
+	_crucible_art_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_crucible_art_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_crucible_art_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	_crucible_art_vbox.add_theme_constant_override("separation", 8)
+
+	_crucible_art_btn = TextureButton.new()
+	_crucible_art_btn.name = "CrucibleArtButton"
+	_crucible_art_btn.texture_normal = CRUCIBLE_TEX
+	_crucible_art_btn.texture_pressed = CRUCIBLE_TEX
+	_crucible_art_btn.texture_hover = CRUCIBLE_TEX
+	_crucible_art_btn.texture_disabled = CRUCIBLE_TEX
+	_crucible_art_btn.ignore_texture_size = true
+	_crucible_art_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	_crucible_art_btn.custom_minimum_size = Vector2(260, 260) # tweak to taste
+	_crucible_art_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_crucible_art_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_crucible_art_btn.tooltip_text = "Draw"
+	_crucible_art_btn.pressed.connect(_on_crucible_art_pressed)
+	_crucible_art_vbox.add_child(_crucible_art_btn)
+	_crucible_btn_base_scale = _crucible_art_btn.scale
+
+	_crucible_keys_count_label = Label.new()
+	_crucible_keys_count_label.name = "CrucibleKeysCount"
+	_crucible_keys_count_label.text = "0"
+	_crucible_keys_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_crucible_keys_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_crucible_keys_count_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_crucible_keys_count_label.add_theme_font_size_override("font_size", 22)
+	_crucible_art_vbox.add_child(_crucible_keys_count_label)
+
+	# Insert into the crucible row where the panel would have been.
+	var insert_before: int = crucible_row.get_child_count()
+	if is_instance_valid(crucible_panel):
+		insert_before = crucible_panel.get_index()
+	crucible_row.add_child(_crucible_art_vbox)
+	crucible_row.move_child(_crucible_art_vbox, insert_before)
+
+func _on_crucible_art_pressed() -> void:
+	# Prevent double presses while animating.
+	if _crucible_animating:
+		return
+
+	await _play_crucible_click_anim()
+	_on_crucible_draw_pressed() # this will open the compare window AFTER animation
+
+func _build_crucible_click_frames() -> void:
+	_crucible_click_frames.clear()
+
+	for i in range(CRUCIBLE_FRAME_COUNT):
+		var col: int = i % CRUCIBLE_SHEET_COLS
+		var row: int = i / CRUCIBLE_SHEET_COLS
+
+		# Safety: don't exceed declared rows
+		if row >= CRUCIBLE_SHEET_ROWS:
+			break
+
+		var atlas := AtlasTexture.new()
+		atlas.atlas = CRUCIBLE_SHEET_TEX
+		atlas.region = Rect2i(
+			col * CRUCIBLE_FRAME_SIZE.x,
+			row * CRUCIBLE_FRAME_SIZE.y,
+			CRUCIBLE_FRAME_SIZE.x,
+			CRUCIBLE_FRAME_SIZE.y
+		)
+		_crucible_click_frames.append(atlas)
+
+	# Fallback safety
+	if _crucible_click_frames.is_empty():
+		_crucible_click_frames.append(CRUCIBLE_IDLE_TEX)
+
+func _set_crucible_button_texture(tex: Texture2D) -> void:
+	_crucible_art_btn.texture_normal = tex
+	_crucible_art_btn.texture_hover = tex
+	_crucible_art_btn.texture_pressed = tex
+	_crucible_art_btn.texture_disabled = tex
+
+func _play_crucible_click_anim() -> void:
+	if _crucible_animating:
+		return
+	_crucible_animating = true
+	_crucible_art_btn.disabled = true
+
+	var dt: float = 1.0 / maxf(1.0, CRUCIBLE_FPS)
+	for tex in _crucible_click_frames:
+		_set_crucible_button_texture(tex)
+		await get_tree().create_timer(dt).timeout
+
+	_set_crucible_button_texture(CRUCIBLE_IDLE_TEX)
+	_crucible_art_btn.disabled = false
+	_crucible_animating = false
+
+func _await_crucible_click_anim_if_possible() -> void:
+	# If you ever open Home without the art button, or before frames are built, skip safely.
+	if not is_instance_valid(_crucible_art_btn):
+		return
+	if _crucible_click_frames == null or _crucible_click_frames.is_empty():
+		return
+
+	# If another animation is running, wait for it to finish instead of skipping.
+	while _crucible_animating:
+		await get_tree().process_frame
+
+	await _play_crucible_click_anim()
