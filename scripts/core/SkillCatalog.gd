@@ -242,12 +242,11 @@ static func starter_loadout() -> Array[String]:
 
 ######========= BACKWARDS COMPATIBILITY CODE++++++++++###############
 static func starting_skill_levels_for_class(_class_id: int) -> Dictionary:
-	# Universal active skills MVP: grant all active skills at level 1.
-	# Passive skills will be handled later, so we grant none here.
+	# New baseline: all skills start locked (level 0).
 	_ensure_built()
 	var out: Dictionary = {}
 	for sid in all_active_ids():
-		out[sid] = 1
+		out[sid] = 0
 	return out
 
 static func starting_active_loadout_for_class(_class_id: int) -> Array[String]:

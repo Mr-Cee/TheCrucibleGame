@@ -291,7 +291,6 @@ func add_xp(amount: int) -> int:
 
 	return levels_gained
 
-
 func battlepass_active(now_unix: int) -> bool:
 	return battlepass_expires_unix > now_unix
 
@@ -400,7 +399,6 @@ func ensure_class_and_skills_initialized() -> void:
 	# Re-sanitize equipped lists after seeding
 	ensure_active_skills_initialized()
 
-
 func set_skill_level(skill_id: String, lvl: int) -> void:
 	if skill_id == "":
 		return
@@ -507,8 +505,18 @@ func add_skill_copies(skill_id: String, amount: int = 1) -> void:
 	ensure_active_skills_initialized()
 	if SkillCatalog.get_def(skill_id) == null:
 		return
-	var cur: int = int(skill_progress.get(skill_id, 0))
-	skill_progress[skill_id] = cur + amount
+
+	var lvl: int = int(skill_levels.get(skill_id, 0))
+	var prog: int = int(skill_progress.get(skill_id, 0)) + amount
+
+	# If locked, first copy unlocks the skill (consumes 1 copy)
+	if lvl <= 0 and prog > 0:
+		lvl = 1
+		prog -= 1
+		skill_levels[skill_id] = lvl
+
+	skill_progress[skill_id] = prog
+
 
 func can_upgrade_skill(skill_id: String) -> bool:
 	ensure_active_skills_initialized()
