@@ -46,6 +46,9 @@ var _last_enemy_count: int = -1
 const ENEMY_DIR := "res://assets/enemies"
 const ENEMY_FALLBACK := preload("res://assets/enemies/enemy_goblin.png")
 
+const MINION_SPR_SCALE: float = 0.12          # your current tuned value
+const BOSS_SPR_SCALE_MULT: float = 1.75       # pick 1.5–2.0 to taste
+
 var _enemy_textures: Array[Texture2D] = []
 
 var _enemy_prev_alive: Array[bool] = []
@@ -510,6 +513,13 @@ func _rebuild_enemy_squares(count: int) -> void:
 	
 	if _enemy_textures.is_empty():
 		_load_enemy_textures()
+		
+	var wave: int = int(Game.battle_state.get("wave", 1))
+	var is_boss: bool = (wave == Catalog.BATTLE_WAVES_PER_STAGE)
+	var scale_mult: float = (BOSS_SPR_SCALE_MULT if is_boss else 1.0)
+	
+	var sprite_size = (Vector2(132 , 132) if is_boss else Vector2(92, 92))
+	
 
 	for i in range(count):
 		# Cell holds HP bar + sprite
@@ -522,7 +532,9 @@ func _rebuild_enemy_squares(count: int) -> void:
 		# --- HP bar (background + fill) ---
 		var hp_bar := Control.new()
 		hp_bar.name = "HPBar"
-		hp_bar.custom_minimum_size = Vector2(48, 6)
+		hp_bar.custom_minimum_size = Vector2(48, 10)
+		if is_boss:
+			hp_bar.custom_minimum_size.x *= scale_mult
 		hp_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		hp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
@@ -548,8 +560,8 @@ func _rebuild_enemy_squares(count: int) -> void:
 		spr.name = "Sprite"
 		spr.texture = _enemy_textures.pick_random()
 		spr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		spr.custom_minimum_size = Vector2(96, 96)
-		spr.size = Vector2(32, 32)
+		spr.custom_minimum_size = sprite_size
+		spr.size = sprite_size
 		spr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		spr.modulate = Color(1, 1, 1, 1)
 		spr.self_modulate = Color(1, 1, 1, 1)
