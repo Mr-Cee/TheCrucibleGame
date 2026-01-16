@@ -36,6 +36,14 @@ var _task_root: Control
 var _task_panel: Control
 var _task_reposition_queued: bool = false
 
+var _dock: VBoxContainer = null
+var _skill_cast_row: HBoxContainer = null
+
+const DOCK_LEFT_MARGIN: float = 16.0
+const DOCK_BOTTOM_OFFSET: float = 400.0 # tweak until it sits right above your Speed dropdown
+const DOCK_SEPARATION: int = 6
+
+
 # Placeholder battlefield visuals (player + enemy squares)
 var _battlefield_row: HBoxContainer = null
 var _player_square: ColorRect = null
@@ -61,6 +69,14 @@ func _ready() -> void:
 	_ensure_skills_row_ui()
 	_ensure_task_panel_overlay()
 	_ensure_battlefield_ui()
+	
+	# Give the combat log the vertical space by default.
+	if combat_log_scroll != null:
+		combat_log_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		combat_log_scroll.size_flags_stretch_ratio = 4.0
+		# Optional safety minimum so it never collapses too small:
+		combat_log_scroll.custom_minimum_size.y = 220
+
 
 
 	# --- Combat log setup ---
@@ -115,23 +131,6 @@ func _ready() -> void:
 
 	_rebuild_log_from_game()
 	_scroll_log_to_bottom()
-	
-	#var tp := preload("res://scripts/systems/Tasks/TaskPanel.gd").new()
-	#tp.name = "TaskPanel"
-#
-	## Anchor bottom-left
-	#tp.anchor_left = 0.0
-	#tp.anchor_right = 0.0
-	#tp.anchor_top = 1.0
-	#tp.anchor_bottom = 1.0
-#
-	## Position/size (tune as you like)
-	#tp.offset_left = 16
-	#tp.offset_right = 16 + 280
-	#tp.offset_top = -60
-	#tp.offset_bottom = -16
-#
-	#add_child(tp)
 
 func _process(delta: float) -> void:
 	_ui_accum += delta
@@ -434,6 +433,9 @@ func _ensure_task_panel_overlay() -> void:
 
 		# We will position via offsets; keep it top-left anchored
 		_task_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		
+		_ensure_bottom_left_dock()
+
 
 	# Reposition after layout has run
 	_queue_task_panel_reposition()
@@ -463,14 +465,14 @@ func _ensure_battlefield_ui() -> void:
 	_battlefield_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_battlefield_row.add_theme_constant_override("separation", 12)
 	
-	_battlefield_row.custom_minimum_size = Vector2(0, 275) # tweak 100–220 to taste
-	
-	# Let this row take vertical space so its contents can be centered in that gap.
-	_battlefield_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_battlefield_row.size_flags_stretch_ratio = 1.0
+	# Reserve enough height for sprites + HP bars, but do NOT expand and steal log space.
+	_battlefield_row.custom_minimum_size = Vector2(0, 150) # tweak 120–200
+	_battlefield_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_battlefield_row.size_flags_stretch_ratio = 0.0
 
-	# For HBoxContainer, this centers children vertically within the row's height.
-	_battlefield_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	# Push player + enemies to the bottom of this row.
+	_battlefield_row.alignment = BoxContainer.ALIGNMENT_END
+
 
 	# Player square
 	_player_square = ColorRect.new()
@@ -614,38 +616,31 @@ func _apply_battlefield_ui() -> void:
 
 func _reposition_task_panel() -> void:
 	_task_reposition_queued = false
-
-	if _task_panel == null or skills_row == null:
+	if _dock == null:
 		return
 
-	# If layout isn't ready yet, try again next frame
-	var sr := skills_row.get_global_rect()
-	if sr.size == Vector2.ZERO:
+	# Ensure dock has a valid size (layout pass)
+	var ds := _dock.get_combined_minimum_size()
+	if ds == Vector2.ZERO:
 		_queue_task_panel_reposition()
 		return
 
-	var margin: float = 8.0
-	var min_x: float = 16.0
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var vps := vp.get_visible_rect().size
 
-	# Use the panel's minimum size (TaskPanel.gd should set custom_minimum_size)
-	var ps := _task_panel.get_combined_minimum_size()
-	if ps == Vector2.ZERO:
-		ps = Vector2(320, 48) # fallback only if minimum size isn't set
+	var x: float = DOCK_LEFT_MARGIN
+	var y: float = vps.y - DOCK_BOTTOM_OFFSET - ds.y
 
-	# Align with the skills row on X (but keep a minimum left margin)
-	var x: float = maxf(min_x, sr.position.x)
+	# Clamp to keep it on-screen
+	y = clampf(y, 8.0, vps.y - ds.y - 8.0)
 
-	# Place ABOVE the skills row
-	var y: float = sr.position.y - ps.y - margin
-
-	# If that would go off-screen, fall back to BELOW the skills row
-	if y < margin:
-		y = sr.position.y + sr.size.y + margin
-
-	_task_panel.offset_left = x
-	_task_panel.offset_right = x + ps.x
-	_task_panel.offset_top = y
-	_task_panel.offset_bottom = y + ps.y
+	_dock.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_dock.offset_left = x
+	_dock.offset_top = y
+	_dock.offset_right = x + ds.x
+	_dock.offset_bottom = y + ds.y
 
 func _sync_enemy_sprites(enemies: Array[Dictionary], target_idx: int) -> void:
 	# Keep tracker sized correctly
@@ -749,3 +744,60 @@ func _load_enemy_textures() -> void:
 
 	if _enemy_textures.is_empty():
 		_enemy_textures.append(ENEMY_FALLBACK)
+
+func _ensure_bottom_left_dock() -> void:
+	if _dock != null:
+		return
+	if _task_root == null:
+		return
+
+	_dock = VBoxContainer.new()
+	_dock.name = "BottomLeftDock"
+	_dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dock.add_theme_constant_override("separation", DOCK_SEPARATION)
+	_task_root.add_child(_dock)
+
+	# --- Skill Cast row (above skills buttons) ---
+	_skill_cast_row = HBoxContainer.new()
+	_skill_cast_row.name = "SkillCastRow"
+	_skill_cast_row.add_theme_constant_override("separation", 8)
+	_dock.add_child(_skill_cast_row)
+
+	# Reuse or create the label
+	if _skill_mode_label == null:
+		_skill_mode_label = Label.new()
+		_skill_mode_label.name = "SkillModeLabel"
+		_skill_mode_label.text = "Skill Cast:"
+	_skill_cast_row.add_child(_skill_mode_label)
+
+	# Move the existing toggle into the cast row
+	if auto_skills_toggle != null and auto_skills_toggle.get_parent() != _skill_cast_row:
+		var oldp := auto_skills_toggle.get_parent()
+		if oldp != null:
+			oldp.remove_child(auto_skills_toggle)
+		_skill_cast_row.add_child(auto_skills_toggle)
+
+	# --- Skills row (buttons) ---
+	if skills_row != null and skills_row.get_parent() != _dock:
+		# Remove the spacer that pushes everything to the right
+		var sp := skills_row.get_node_or_null("SkillSpacer")
+		if sp != null:
+			sp.queue_free()
+
+		# If SkillModeLabel was previously inserted into SkillsRow, remove it
+		var lbl_in_row := skills_row.get_node_or_null("SkillModeLabel")
+		if lbl_in_row != null:
+			skills_row.remove_child(lbl_in_row)
+
+		# Reparent the skills row into the dock
+		var srp := skills_row.get_parent()
+		if srp != null:
+			srp.remove_child(skills_row)
+		_dock.add_child(skills_row)
+
+	# --- Task panel (below skills) ---
+	if _task_panel != null and _task_panel.get_parent() != _dock:
+		var tp := _task_panel.get_parent()
+		if tp != null:
+			tp.remove_child(_task_panel)
+		_dock.add_child(_task_panel)

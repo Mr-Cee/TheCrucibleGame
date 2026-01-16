@@ -185,14 +185,18 @@ func _ready() -> void:
 	skills_button.pressed.connect(_on_skills_pressed)
 	dev_popup.visible = false
 	
-	$RootMargin/RootVBox/BattleSection/SkillsRow/AutoSkillsToggle.button_pressed = Game.skills_auto_enabled()
-	$RootMargin/RootVBox/BattleSection/SkillsRow/AutoSkillsToggle.toggled.connect(func(v: bool) -> void:
-		Game.set_skills_auto_enabled(v)
-	)
+	var battle_section := $RootMargin/RootVBox/BattleSection
+	var t := battle_section.find_child("AutoSkillsToggle", true, false) as CheckButton
+	if t != null:
+		t.button_pressed = Game.skills_auto_enabled()
+		if not t.toggled.is_connected(func(v: bool) -> void: Game.set_skills_auto_enabled(v)):
+			t.toggled.connect(func(v: bool) -> void:
+				Game.set_skills_auto_enabled(v)
+			)
+
 	if cp_label:
 		cp_label.gui_input.connect(_on_cp_label_gui_input)
 
-	
 	# Connect Crucible draw signal
 	if crucible_panel.has_signal("draw_pressed"):
 		crucible_panel.connect("draw_pressed", _on_crucible_draw_pressed)
@@ -215,7 +219,6 @@ func _ready() -> void:
 	rarity_option.item_selected.connect(_on_rarity_selected)
 	auto_sell_check.toggled.connect(_on_auto_sell_toggled)
 	start_stop_button.pressed.connect(_on_start_stop_auto_pressed)
-	
 	
 	#Crucible Upgrade Popup
 	upgrade_button.pressed.connect(func() -> void:
@@ -474,7 +477,6 @@ func _refresh_hud_nonbattle() -> void:
 	if is_instance_valid(_crucible_keys_count_label):
 		_crucible_keys_count_label.text = str(int(p.crucible_keys))
 
-
 func _on_crucible_draw_pressed() -> void:
 	# Manual draw stops auto
 	_stop_auto_draw()
@@ -590,8 +592,6 @@ func _run_batch_draw(batch: int, token: int) -> void:
 		if not _auto_running or token != _auto_cancel_token:
 			return
 		await _show_compare_and_wait(_peek_deferred_item(), true)
-
-
 
 func _run_auto_loop(token: int) -> void:
 	# Continuous auto: keep drawing batches until stopped or out of keys.

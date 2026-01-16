@@ -28,6 +28,10 @@ func _build() -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.color = Color(0, 0, 0, 0.65)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	
+	# Close when clicking outside the panel (on the dim/backdrop)
+	dim.gui_input.connect(_on_dim_gui_input)
+	
 	add_child(dim)
 
 	_panel = PanelContainer.new()
@@ -114,3 +118,8 @@ func _rebuild_grid() -> void:
 		var tex := SkillCatalog.icon_with_rarity_border(sid, ICON_SIZE, 2)
 		tr.texture = tex
 		_grid.add_child(tr)
+
+func _on_dim_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		queue_free()
+		accept_event()
