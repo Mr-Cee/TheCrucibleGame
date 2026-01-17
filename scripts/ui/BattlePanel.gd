@@ -713,12 +713,17 @@ func _fade_out_enemy_sprite(sq: CanvasItem) -> void:
 		.set_ease(Tween.EASE_IN_OUT)
 
 	t.finished.connect(func():
-		# Hard-finalize the death: completely hidden.
-		sq.modulate.a = 0.0
+		if not is_instance_valid(sq):
+			return
+		if not (sq is CanvasItem):
+			return
+
+		sq.modulate = Color(sq.modulate.r, sq.modulate.g, sq.modulate.b, 0.0)
 		sq.visible = false
 		sq.set_meta("dead_hidden", true)
 		sq.set_meta("fading", false)
 	)
+
 
 func _load_enemy_textures() -> void:
 	_enemy_textures.clear()
