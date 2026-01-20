@@ -21,6 +21,8 @@ enum DungeonKind { BOSS, WAVES }
 # --- Dungeon behavior ---
 @export var kind: int = DungeonKind.BOSS
 
+@export var time_limit_seconds: float = 0.0 # 0 = no timer
+
 # --- Boss configuration (used when kind == BOSS) ---
 @export var enemy_name: String = "Boss"
 @export var enemy_hp_mult_base: float = 10.0
@@ -30,3 +32,4 @@ enum DungeonKind { BOSS, WAVES }
 @export var enemy_def_mult_base: float = 2.0
 @export var enemy_def_mult_per_level: float = 0.10
 @export var enemy_aps: float = 0.75
+@export var enemy_damage_mult: float = 1.0 # 1.0 = normal, 0.0 = enemy deals no damage

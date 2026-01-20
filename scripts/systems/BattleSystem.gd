@@ -754,7 +754,20 @@ func _tick_timer_reset_mult(time_key: String, mult_key: String, reset_value: flo
 func _battle_process(delta: float) -> void:
 	if not _battle_inited:
 		return
+	
+	var total: float = float(battle_runtime.get("dungeon_time_total", 0.0))
+	if total > 0.0:
+		var left: float = float(battle_runtime.get("dungeon_time_left", total))
+		left = max(0.0, left - delta) # unscaled real time
+		battle_runtime["dungeon_time_left"] = left
 
+		if left <= 0.0:
+			battle_runtime["status_text"] = "Time's up!"
+			log_combat("system", "defeat", "[color=#FF4444][b]Time's up![/b][/color]")
+			battle_changed.emit()
+			_finish_dungeon(false, {}) # fail, no key consumed
+			return
+	
 	# If defeated, freeze battle briefly so UI can show 0 HP.
 	if _defeat_pause_remaining > 0.0:
 		_defeat_pause_remaining -= delta  # unscaled real-time
@@ -872,7 +885,14 @@ func _battle_enemy_attack_from(attacker_idx: int) -> void:
 	# Target-scoped weaken only affects the weakened enemy's attacks.
 	if is_target:
 		dmg *= _enemy_atk_mult()
-
+		
+	# Dungeon rule: optionally disable enemy damage (DPS race dungeons)
+	if _dungeon_active:
+		var mult: float = float(battle_runtime.get("dungeon_enemy_damage_mult", 1.0))
+		if mult <= 0.0:
+			return
+		dmg *= mult
+		
 	# Avoid
 	if (RNG as RNGService).randf() < (clamp(_p_avoid + float(battle_runtime.get("player_avoid_pp_add", 0.0)), 0.0, 100.0) / 100.0):
 		if combat_log_compact_effective():
@@ -1323,9 +1343,23 @@ func start_dungeon_run(dungeon_id: String) -> bool:
 	_dungeon_id = dungeon_id
 	_dungeon_level = ds.get_current_level(dungeon_id)
 	
+	var limit: float = 0.0
+	if ds != null and ds.has_method("time_limit_seconds"):
+		limit = float(ds.time_limit_seconds(dungeon_id))
+
+	battle_runtime["dungeon_time_total"] = limit
+	battle_runtime["dungeon_time_left"] = limit
+
+	
 	battle_runtime["dungeon_id"] = dungeon_id
 	battle_runtime["dungeon_level"] = _dungeon_level
-
+	
+	# Dungeon combat rules
+	var mult: float = 1.0
+	#var ds: Variant = (game.get("dungeon_system") if game != null else null)
+	if ds != null and (ds as Object).has_method("enemy_damage_mult"):
+		mult = float((ds as Object).call("enemy_damage_mult", dungeon_id))
+	battle_runtime["dungeon_enemy_damage_mult"] = mult
 
 	# Reset to a clean dungeon fight
 	clear_combat_log()

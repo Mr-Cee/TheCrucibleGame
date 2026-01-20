@@ -163,8 +163,24 @@ func enemy_stats_for_level(dungeon_id: String, level: int) -> Dictionary:
 			return {}
 
 func _consume_key(dungeon_id: String) -> bool:
-	var k: int = get_key_count(dungeon_id) # or your existing getter
+	var k: int = get_key_count(dungeon_id)
 	if k <= 0:
 		return false
-	add_keys(dungeon_id, k - 1)       # or your existing setter
+	_player.dungeon_keys[dungeon_id] = k - 1
 	return true
+
+
+func get_def(dungeon_id: String) -> DungeonDef:
+	return DungeonCatalog.get_def(dungeon_id)
+	
+func time_limit_seconds(dungeon_id: String) -> float:
+	var def: DungeonDef = get_def(dungeon_id)
+	if def == null:
+		return 0.0
+	return max(0.0, float(def.time_limit_seconds))
+
+func enemy_damage_mult(dungeon_id: String) -> float:
+	var def: DungeonDef = DungeonCatalog.get_def(dungeon_id)
+	if def == null:
+		return 1.0
+	return clampf(float(def.enemy_damage_mult), 0.0, 10.0)

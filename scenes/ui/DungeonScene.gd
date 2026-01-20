@@ -7,6 +7,12 @@ var _e_bar: ProgressBar
 var _p_lbl: Label
 var _e_lbl: Label
 var _subtitle: Label
+var _timer_bar: ProgressBar
+var _timer_lbl: Label
+var _timer_fill_green: StyleBoxFlat
+var _timer_fill_yellow: StyleBoxFlat
+var _timer_fill_red: StyleBoxFlat
+var _timer_fill_state: int = -1 # 0=green, 1=yellow, 2=red
 
 
 var _skill_buttons: Array[Button] = []
@@ -17,8 +23,6 @@ var _skill_overlay_labels: Array[Label] = []
 
 var _log_label: RichTextLabel
 
-
-
 var _player_tex: TextureRect
 var _enemy_tex: TextureRect
 var _cached_player_sprite_path: String = ""
@@ -26,6 +30,7 @@ var _cached_enemy_sprite_path: String = ""
 const PLAYER_ART_MAX: Vector2 = Vector2(96, 96)
 const ENEMY_ART_MAX: Vector2 = Vector2(350, 350)
 
+# ==================================================================================================
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -148,6 +153,64 @@ func _build_ui() -> void:
 	_e_bar.value = 100
 	root.add_child(_e_bar)
 	
+	# Timer row (centered)
+	var timer_center := CenterContainer.new()
+	timer_center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	timer_center.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	root.add_child(timer_center)
+
+	var timer_box := VBoxContainer.new()
+	timer_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	timer_box.add_theme_constant_override("separation", 4)
+	timer_center.add_child(timer_box)
+
+	_timer_lbl = Label.new()
+	_timer_lbl.text = ""
+	_timer_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	timer_box.add_child(_timer_lbl)
+
+	_timer_bar = ProgressBar.new()
+	_timer_bar.custom_minimum_size = Vector2(320, 18)
+	_timer_bar.min_value = 0
+	_timer_bar.max_value = 30
+	_timer_bar.value = 30
+	_timer_bar.show_percentage = false
+	timer_box.add_child(_timer_bar)
+	
+	# Timer bar styling (background + dynamic fill colors)
+	var timer_bg := StyleBoxFlat.new()
+	timer_bg.bg_color = Color(0.12, 0.12, 0.12, 1.0)
+	timer_bg.corner_radius_top_left = 6
+	timer_bg.corner_radius_top_right = 6
+	timer_bg.corner_radius_bottom_left = 6
+	timer_bg.corner_radius_bottom_right = 6
+	_timer_bar.add_theme_stylebox_override("background", timer_bg)
+
+
+	_timer_fill_green = StyleBoxFlat.new()
+	_timer_fill_green.bg_color = Color(0.20, 0.75, 0.25, 1.0)
+	_timer_fill_green.corner_radius_top_left = 6
+	_timer_fill_green.corner_radius_top_right = 6
+	_timer_fill_green.corner_radius_bottom_left = 6
+	_timer_fill_green.corner_radius_bottom_right = 6
+
+	_timer_fill_yellow = StyleBoxFlat.new()
+	_timer_fill_yellow.bg_color = Color(0.90, 0.75, 0.20, 1.0)
+	_timer_fill_yellow.corner_radius_top_left = 6
+	_timer_fill_yellow.corner_radius_top_right = 6
+	_timer_fill_yellow.corner_radius_bottom_left = 6
+	_timer_fill_yellow.corner_radius_bottom_right = 6
+
+	_timer_fill_red = StyleBoxFlat.new()
+	_timer_fill_red.bg_color = Color(0.85, 0.20, 0.20, 1.0)
+	_timer_fill_red.corner_radius_top_left = 6
+	_timer_fill_red.corner_radius_top_right = 6
+	_timer_fill_red.corner_radius_bottom_left = 6
+	_timer_fill_red.corner_radius_bottom_right = 6
+
+	# Default fill
+	_timer_fill_state = -1
+
 	# Portrait row (player left, enemy right)
 	var portraits := HBoxContainer.new()
 	portraits.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -314,6 +377,39 @@ func _build_ui() -> void:
 func _refresh() -> void:
 	# Pull combat runtime from Game proxy (BattleSystem-owned).
 	var rt: Dictionary = Game.battle_runtime
+	
+	# Dungeon timer UI
+	var t_total: float = float(rt.get("dungeon_time_total", 0.0))
+	var t_left: float = float(rt.get("dungeon_time_left", 0.0))
+
+	var has_timer: bool = t_total > 0.0
+	_timer_bar.visible = has_timer
+	_timer_lbl.visible = has_timer
+		
+	if has_timer:
+		_timer_bar.max_value = t_total
+		_timer_bar.value = t_left
+		_timer_lbl.text = "Time Left: %ds" % int(ceil(t_left))
+
+		var pct: float = (t_left / t_total) if t_total > 0.0 else 0.0
+
+		var desired: int = 2 # red by default
+		if pct >= 0.60:
+			desired = 0 # green
+		elif pct >= 0.25:
+			desired = 1 # yellow
+
+		if desired != _timer_fill_state:
+			_timer_fill_state = desired
+			match desired:
+				0:
+					_timer_bar.add_theme_stylebox_override("fill", _timer_fill_green)
+				1:
+					_timer_bar.add_theme_stylebox_override("fill", _timer_fill_yellow)
+				2:
+					_timer_bar.add_theme_stylebox_override("fill", _timer_fill_red)
+
+
 
 	var p_hp: float = float(rt.get("player_hp", 0.0))
 	var p_max: float = max(1.0, float(rt.get("player_hp_max", 1.0)))
@@ -352,8 +448,6 @@ func _refresh() -> void:
 		_cached_enemy_sprite_path = e_path
 		_enemy_tex.texture = (load(e_path) as Texture2D) if e_path != "" else null
 
-
-
 	for slot in range(5):
 		var id: String = Game.get_equipped_active_skill_id(slot)
 		var btn: Button = _skill_buttons[slot]
@@ -391,7 +485,6 @@ func _refresh() -> void:
 		ov_lbl.visible = on_cd
 		if on_cd:
 			ov_lbl.text = "%d" % int(ceil(rem))
-
 
 func _on_skill_pressed(slot: int) -> void:
 	Game.request_cast_active_skill(slot)

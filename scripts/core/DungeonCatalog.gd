@@ -11,6 +11,7 @@ static func _ensure() -> void:
 
 	var d := DungeonDef.new()
 	d.id = CRUCIBLE_KEY_DUNGEON_ID
+	d.time_limit_seconds = 30.0
 	d.display_name = "Crucible Key Dungeon"
 	d.description = "Fight a single boss that grows stronger each level. Earn Crucible Keys."
 	d.key_display_name = "Crucible Dungeon Key"
@@ -19,7 +20,7 @@ static func _ensure() -> void:
 	d.reward_per_level = 5
 	d.kind = DungeonDef.DungeonKind.BOSS
 	d.enemy_name = "Crucible Warden"
-	d.enemy_sprite_path = "res://assets/enemies/crucible_warden.png"
+	d.enemy_sprite_path = "res://assets/bosses/crucible_warden.png"
 	d.enemy_hp_mult_base = 12.0
 	d.enemy_hp_mult_per_level = 0.85
 	d.enemy_atk_mult_base = 4.5
@@ -27,6 +28,7 @@ static func _ensure() -> void:
 	d.enemy_def_mult_base = 2.2
 	d.enemy_def_mult_per_level = 0.12
 	d.enemy_aps = 0.75
+	d.enemy_damage_mult = 0.0
 
 	_defs[d.id] = d
 
