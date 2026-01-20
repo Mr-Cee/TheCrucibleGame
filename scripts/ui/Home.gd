@@ -59,8 +59,7 @@ extends Control
 @onready var dev_popup: Window = $DevPopup
 
 @onready var skills_button: Button = $RootMargin/RootVBox/TownNav/TownNavRow/SkillsBtn
-#@onready var passive_test_btn: Button = $RootMargin/RootVBox/TownNav/TownNavRow/PassiveTest
-
+@onready var dungeons_btn: Button = $"RootMargin/RootVBox/TownNav/TownNavRow/DungeonBtn"
 
 
 #----------------------------------------------------------------
@@ -183,6 +182,8 @@ func _ready() -> void:
 	sell_button.pressed.connect(_on_sell_pressed)
 	close_button.pressed.connect(_on_close_pressed)
 	skills_button.pressed.connect(_on_skills_pressed)
+	if not dungeons_btn.pressed.is_connected(_on_dungeons_pressed):
+		dungeons_btn.pressed.connect(_on_dungeons_pressed)
 	dev_popup.visible = false
 	
 	var battle_section := $RootMargin/RootVBox/BattleSection
@@ -798,6 +799,11 @@ func open_voucher_popup() -> void:
 	_vp_count = 0
 	_vp_refresh_ui()
 	voucher_popup.popup_centered(Vector2i(520, 260))
+
+func _on_dungeons_pressed() -> void:
+	var panel := DungeonsPanel.new()
+	Game.popup_root().add_child(panel) # <-- critical
+	panel.open()
 
 func _vp_seconds_remaining() -> int:
 	return int(Game.crucible_upgrade_seconds_remaining())

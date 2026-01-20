@@ -96,6 +96,12 @@ var _skill_queue: Array[int] = []
 # Global lock remaining (seconds, scaled by battle speed)
 var _skill_lock: float = 0.0
 
+# ========== Dungeon Vars =================================
+var _dungeon_active: bool = false
+var _dungeon_id: String = ""
+var _dungeon_level: int = 0
+var _dungeon_saved_ctx: Dictionary = {}
+
 #===================================================================================================
 
 func setup(host_game: Node) -> void:
@@ -909,6 +915,18 @@ func _apply_defense(raw: float, defense: float) -> float:
 	return max(1.0, raw * (100.0 / (100.0 + d)))
 
 func _battle_on_enemy_defeated() -> void:
+	if _dungeon_active:
+		var ds: DungeonSystem = (game.get("dungeon_system") as DungeonSystem)
+		var reward: Dictionary = {}
+		if ds != null:
+			reward = ds.reward_and_advance_on_success(_dungeon_id)
+
+		if game != null and game.has_signal("inventory_event") and ds != null:
+			game.emit_signal("inventory_event", "Dungeon cleared! Gained: %s" % ds.reward_to_text(reward))
+
+		_finish_dungeon(true, reward)
+		return
+	
 	if player == null:
 		return
 
@@ -982,6 +1000,20 @@ func _battle_on_enemy_defeated() -> void:
 	_battle_spawn_enemy(true)
 
 func _battle_on_player_defeated() -> void:
+	if _dungeon_active:
+		battle_runtime["player_hp"] = 0.0
+		battle_runtime["status_text"] = "Defeated!"
+		if combat_log_compact_effective():
+			_combat_log_flush(true)
+		log_combat("system", "defeat", "[color=#FF4444][b]Defeated![/b][/color]")
+		battle_changed.emit()
+
+		if game != null and game.has_signal("inventory_event"):
+			game.emit_signal("inventory_event", "Dungeon failed.")
+
+		_finish_dungeon(false, {})
+		return
+		
 	# Set HP to 0 and pause so UI can show defeat.
 	battle_runtime["player_hp"] = 0.0
 	battle_runtime["status_text"] = "Defeated!"
@@ -999,6 +1031,10 @@ func _battle_on_player_defeated() -> void:
 	_battle_spawn_enemy(true)
 
 func _battle_spawn_enemy(reset_hp: bool) -> void:
+	if _dungeon_active:
+		_battle_spawn_dungeon_enemy(reset_hp)
+		return
+		
 	var diff: String = String(battle_state.get("difficulty", "Easy"))
 	var lvl: int = int(battle_state.get("level", 1))
 	var stg: int = int(battle_state.get("stage", 1))
@@ -1051,6 +1087,43 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 			"atk": atkv,
 			"atk_timer": t0,
 		})
+
+	_target_enemy_idx = 0
+	_ensure_valid_target()
+	_reset_target_enemy_effects()
+	__refresh_enemy_totals()
+
+func _battle_spawn_dungeon_enemy(reset_hp: bool) -> void:
+	var ds: DungeonSystem = (game.get("dungeon_system") as DungeonSystem)
+	if ds == null:
+		return
+
+	var stats: Dictionary = ds.enemy_stats_for_level(_dungeon_id, _dungeon_level)
+
+	var hp: float = float(stats.get("hp", Catalog.ENEMY_BASE_HP))
+	var atk: float = float(stats.get("atk", Catalog.ENEMY_BASE_ATK))
+	var df: float = float(stats.get("def", Catalog.ENEMY_BASE_DEF))
+	var aps: float = float(stats.get("aps", 0.75))
+
+	battle_runtime["is_boss"] = true
+	battle_runtime["enemy_name"] = String(stats.get("name", "Boss"))
+	battle_runtime["enemy_sprite_path"] = String(stats.get("sprite_path", ""))
+
+
+	battle_runtime["enemy_hp_max"] = hp
+	if reset_hp:
+		battle_runtime["enemy_hp"] = hp
+
+	_e_def = max(0.0, df)
+	_e_aps = max(0.10, aps)
+
+	_enemies.clear()
+	_enemies.append({
+		"hp_max": hp,
+		"hp": (hp if reset_hp else hp),
+		"atk": max(1.0, atk),
+		"atk_timer": _roll_enemy_attack_interval(true, true),
+	})
 
 	_target_enemy_idx = 0
 	_ensure_valid_target()
@@ -1219,3 +1292,138 @@ func _combat_log_flush(force: bool) -> void:
 		_agg_rewards = {"gold": 0, "keys": 0, "waves": 0, "boss_waves": 0}
 
 # ==============================================================================================
+
+func start_dungeon_run(dungeon_id: String) -> bool:
+	if game == null:
+		return false
+
+	var ds: DungeonSystem = game.get("dungeon_system") as DungeonSystem
+	if ds == null:
+		return false
+
+	# Refresh player reference
+	var gp: PlayerModel = (game.player if game != null else player)
+	if gp != player:
+		set_player(gp)
+	if player == null:
+		return false
+
+	if _dungeon_active:
+		return false
+
+	# Consume entry key up front
+	if not ds.begin_attempt(dungeon_id):
+		if game.has_signal("inventory_event"):
+			game.emit_signal("inventory_event", "Not enough dungeon keys.")
+		return false
+
+	_dungeon_saved_ctx = _capture_dungeon_context()
+
+	_dungeon_active = true
+	_dungeon_id = dungeon_id
+	_dungeon_level = ds.get_current_level(dungeon_id)
+	
+	battle_runtime["dungeon_id"] = dungeon_id
+	battle_runtime["dungeon_level"] = _dungeon_level
+
+
+	# Reset to a clean dungeon fight
+	clear_combat_log()
+	_skills_init_runtime()
+	_battle_reset_effects()
+	_battle_recompute_player_combat()
+
+	battle_runtime["player_hp_max"] = _p_hp_max
+	battle_runtime["player_hp"] = _p_hp_max
+	battle_runtime["status_text"] = "Dungeon"
+
+	_defeat_pause_remaining = 0.0
+	_p_atk_accum = 0.0
+
+	_battle_inited = true
+	_battle_spawn_enemy(true)
+	battle_changed.emit()
+
+	if game.has_signal("dungeon_started"):
+		game.emit_signal("dungeon_started", dungeon_id, _dungeon_level)
+	return true
+
+func abort_dungeon_run() -> void:
+	if not _dungeon_active:
+		return
+	_finish_dungeon(false, {})
+
+func _capture_dungeon_context() -> Dictionary:
+	return {
+		"battle_state": battle_state.duplicate(true),
+		"battle_runtime": battle_runtime.duplicate(true),
+		"battle_inited": _battle_inited,
+		"p_atk_accum": _p_atk_accum,
+		"defeat_pause": _defeat_pause_remaining,
+
+		"skill_cd": _skill_cd.duplicate(),
+		"skill_queue": _skill_queue.duplicate(),
+		"skill_lock": _skill_lock,
+
+		"enemies": _enemies.duplicate(true),
+		"target_idx": _target_enemy_idx,
+
+		"combat_log_entries": combat_log_entries.duplicate(true),
+
+		"agg_player": _agg_player_hits.duplicate(true),
+		"agg_enemy": _agg_enemy_hits.duplicate(true),
+		"agg_rewards": _agg_rewards.duplicate(true),
+		"agg_flush_accum": _agg_flush_accum,
+	}
+
+func _restore_dungeon_context(ctx: Dictionary) -> void:
+	if ctx.is_empty():
+		return
+
+	battle_state = (ctx.get("battle_state", {}) as Dictionary)
+	battle_runtime = (ctx.get("battle_runtime", {}) as Dictionary)
+
+	_battle_inited = bool(ctx.get("battle_inited", true))
+	_p_atk_accum = float(ctx.get("p_atk_accum", 0.0))
+	_defeat_pause_remaining = float(ctx.get("defeat_pause", 0.0))
+
+	_skill_cd = (ctx.get("skill_cd", [0.0,0.0,0.0,0.0,0.0]) as Array).duplicate()
+	_skill_queue = (ctx.get("skill_queue", []) as Array).duplicate()
+	_skill_lock = float(ctx.get("skill_lock", 0.0))
+
+	_enemies = (ctx.get("enemies", []) as Array).duplicate(true)
+	_target_enemy_idx = int(ctx.get("target_idx", 0))
+	_ensure_valid_target()
+	__refresh_enemy_totals()
+
+	_agg_player_hits = (ctx.get("agg_player", {"count":0,"dmg":0,"crits":0,"combos":0}) as Dictionary).duplicate(true)
+	_agg_enemy_hits = (ctx.get("agg_enemy", {"count":0,"dmg":0,"blocks":0,"avoids":0}) as Dictionary).duplicate(true)
+	_agg_rewards = (ctx.get("agg_rewards", {"gold":0,"keys":0,"waves":0,"boss_waves":0}) as Dictionary).duplicate(true)
+	_agg_flush_accum = float(ctx.get("agg_flush_accum", 0.0))
+
+	# Restore log entries (re-emit so UI updates)
+	var entries: Array = ctx.get("combat_log_entries", [])
+	combat_log_entries = entries.duplicate(true)
+	combat_log_cleared.emit()
+	for e in combat_log_entries:
+		combat_log_entry_added.emit(e)
+
+	battle_changed.emit()
+
+func _finish_dungeon(success: bool, reward: Dictionary) -> void:
+	var attempted_level: int = _dungeon_level
+	var did: String = _dungeon_id
+
+	_dungeon_active = false
+	_dungeon_id = ""
+	_dungeon_level = 0
+
+	var ctx := _dungeon_saved_ctx
+	_dungeon_saved_ctx = {}
+	_restore_dungeon_context(ctx)
+
+	if game != null:
+		if game.has_signal("player_changed"):
+			game.emit_signal("player_changed")
+		if game.has_signal("dungeon_finished"):
+			game.emit_signal("dungeon_finished", did, attempted_level, success, reward)

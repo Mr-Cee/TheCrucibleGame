@@ -46,20 +46,24 @@ const DOCK_SEPARATION: int = 6
 
 # Placeholder battlefield visuals (player + enemy squares)
 var _battlefield_row: HBoxContainer = null
-var _player_square: ColorRect = null
+#var _player_square: ColorRect = null
 var _enemies_grid: GridContainer = null
 var _enemy_squares: Array[Control] = []
 var _last_enemy_count: int = -1
 
 const ENEMY_DIR := "res://assets/enemies"
 const ENEMY_FALLBACK := preload("res://assets/enemies/enemy_goblin.png")
-
 const MINION_SPR_SCALE: float = 0.12          # your current tuned value
 const BOSS_SPR_SCALE_MULT: float = 1.75       # pick 1.5–2.0 to taste
-
 var _enemy_textures: Array[Texture2D] = []
-
 var _enemy_prev_alive: Array[bool] = []
+
+const PLAYER_TEX_WARRIOR: Texture2D = preload("res://assets/player/warrior.png")
+const PLAYER_TEX_MAGE: Texture2D = preload("res://assets/player/mage.png")
+const PLAYER_TEX_ARCHER: Texture2D = preload("res://assets/player/archer.png")
+var _player_sprite: TextureRect = null
+var _player_sprite_key: String = ""
+
 
 
 var _ui_accum: float = 0.0
@@ -472,15 +476,29 @@ func _ensure_battlefield_ui() -> void:
 
 	# Push player + enemies to the bottom of this row.
 	_battlefield_row.alignment = BoxContainer.ALIGNMENT_END
+	
+	# Push player away from the left edge.
+	var left_pad := Control.new()
+	left_pad.name = "PlayerLeftPad"
+	left_pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_pad.size_flags_stretch_ratio = 1.0
+	_battlefield_row.add_child(left_pad)
 
+	# Player sprite
+	_player_sprite = TextureRect.new()
+	_player_sprite.name = "PlayerSprite"
+	_player_sprite.custom_minimum_size = Vector2(100, 100) # tune to match enemy sprite scale
+	_player_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_player_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_player_sprite.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_player_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST # crisp pixel art
+	_player_sprite.tooltip_text = "Player"
 
-	# Player square
-	_player_square = ColorRect.new()
-	_player_square.custom_minimum_size = Vector2(32, 32)
-	_player_square.color = Color(0.2, 0.9, 0.3, 1.0)
-	_player_square.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_player_square.tooltip_text = "Player"
-	_battlefield_row.add_child(_player_square)
+	_player_sprite_key = _player_sprite_key_from_player()
+	_player_sprite.texture = _player_texture_for_key(_player_sprite_key)
+
+	_battlefield_row.add_child(_player_sprite)
+
 	
 	# Spacer to push enemies to the right.
 	var spacer := Control.new()
@@ -579,6 +597,13 @@ func _apply_battlefield_ui() -> void:
 		return
 	if Game == null:
 		return
+		
+	if _player_sprite != null:
+		var k := _player_sprite_key_from_player()
+		if k != _player_sprite_key:
+			_player_sprite_key = k
+			_player_sprite.texture = _player_texture_for_key(k)
+
 
 	var enemies: Array = []
 	if Game.has_method("get_enemies_snapshot"):
@@ -724,7 +749,6 @@ func _fade_out_enemy_sprite(sq: CanvasItem) -> void:
 		sq.set_meta("fading", false)
 	)
 
-
 func _load_enemy_textures() -> void:
 	_enemy_textures.clear()
 
@@ -806,3 +830,47 @@ func _ensure_bottom_left_dock() -> void:
 		if tp != null:
 			tp.remove_child(_task_panel)
 		_dock.add_child(_task_panel)
+
+func _player_sprite_key_from_player() -> String:
+	if Game == null or Game.player == null:
+		return "warrior"
+
+	# Prefer the class tree id if you use it (advanced classes).
+	var def_id: String = ""
+	# PlayerModel.get() only accepts one argument (property name).
+	if Game.player.has_method("get"):
+		var v: Variant = Game.player.get("class_def_id")
+		if v != null:
+			def_id = String(v)
+	def_id = def_id.to_lower()
+
+
+	# Heuristic mapping for advanced classes (adjust names as needed).
+	if def_id != "":
+		if def_id.contains("archer") or def_id.contains("ranger") or def_id.contains("hunter"):
+			return "archer"
+		if def_id.contains("mage") or def_id.contains("wizard") or def_id.contains("sorc"):
+			return "mage"
+		if def_id.contains("warrior") or def_id.contains("knight") or def_id.contains("paladin") or def_id.contains("berserk"):
+			return "warrior"
+
+	# Fallback to base class_id enum.
+	var cid: int = 0
+	if Game.player.has_method("get"):
+		var cv: Variant = Game.player.get("class_id")
+		if cv != null:
+			cid = int(cv)
+
+	match cid:
+		PlayerModel.ClassId.ARCHER:
+			return "archer"
+		PlayerModel.ClassId.MAGE:
+			return "mage"
+		_:
+			return "warrior"
+
+func _player_texture_for_key(k: String) -> Texture2D:
+	match k:
+		"archer": return PLAYER_TEX_ARCHER
+		"mage": return PLAYER_TEX_MAGE
+		_: return PLAYER_TEX_WARRIOR

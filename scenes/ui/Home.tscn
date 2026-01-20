@@ -926,10 +926,9 @@ text = "Skills"
 layout_mode = 2
 text = "Shop"
 
-[node name="PassiveTest" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+[node name="DungeonBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
 layout_mode = 2
-disabled = true
-text = "Future"
+text = "Dugeons (WIP)"
 
 [node name="FutureBtn2" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
 layout_mode = 2

@@ -9,6 +9,15 @@ signal combat_log_added(line: String)
 signal combat_log_entry_added(entry: Dictionary)
 signal combat_log_cleared
 
+signal dungeon_run_requested(dungeon_id: String, level: int)
+signal dungeon_started(dungeon_id: String, level: int)
+signal dungeon_finished(dungeon_id: String, attempted_level: int, success: bool, reward: Dictionary)
+
+var _dungeon_return_scene_path: String = ""
+var _pending_dungeon_id: String = ""
+
+
+
 #===================================================================================================
 
 var player: PlayerModel
@@ -20,6 +29,7 @@ var _upgrade_check_accum: float = 0.0
 
 var task_system: TaskSystem
 var battle_system: BattleSystem
+var dungeon_system: DungeonSystem
 
 const TIME_VOUCHER_SECONDS: int = 5 * 60 # 5 minutes
 
@@ -61,10 +71,18 @@ func _ready() -> void:
 		battle_system.tick(0.0)
 	else:
 		battle_system.set_idle_status_text("Choose a class to begin.")
+		
+	if not dungeon_run_requested.is_connected(_on_dungeon_run_requested):
+		dungeon_run_requested.connect(_on_dungeon_run_requested)
+
 
 	task_system = TaskSystem.new()
 	add_child(task_system)
 	task_system.setup(player)
+	
+	dungeon_system = DungeonSystem.new()
+	add_child(dungeon_system)
+	dungeon_system.setup(self, player)
 
 	crucible_tick_upgrade_completion()
 
@@ -528,3 +546,71 @@ func get_target_enemy_index() -> int:
 	if battle_system == null:
 		return -1
 	return battle_system.get_target_enemy_index()
+
+func dungeon_request_run(dungeon_id: String) -> bool:
+	if dungeon_system == null:
+		return false
+	if not dungeon_system.can_attempt(dungeon_id):
+		inventory_event.emit("Not enough dungeon keys.")
+		return false
+
+	var lvl: int = dungeon_system.get_current_level(dungeon_id)
+	dungeon_run_requested.emit(dungeon_id, lvl)
+	inventory_event.emit("Dungeon requested: %s (Level %d)" % [dungeon_id, lvl])
+	return true
+
+func dungeon_sweep(dungeon_id: String) -> Dictionary:
+	if dungeon_system == null:
+		return {}
+
+	var reward: Dictionary = dungeon_system.sweep(dungeon_id)
+	if reward.is_empty():
+		inventory_event.emit("Sweep unavailable.")
+		return {}
+
+	player_changed.emit()
+	inventory_event.emit("Swept dungeon and gained: %s" % dungeon_system.reward_to_text(reward))
+	return reward
+
+func add_dungeon_keys(dungeon_id: String, amount: int) -> void:
+	if dungeon_system == null or amount == 0:
+		return
+	dungeon_system.add_keys(dungeon_id, amount)
+	player_changed.emit()
+
+func _on_dungeon_run_requested(dungeon_id: String, _level: int) -> void:
+	begin_dungeon_scene(dungeon_id)
+
+func abort_dungeon_run() -> void:
+	if battle_system != null:
+		battle_system.abort_dungeon_run()
+
+func clear_popup_root_children() -> void:
+	var ui: Control = popup_root()
+	for c in ui.get_children():
+		c.queue_free()
+
+func begin_dungeon_scene(dungeon_id: String) -> void:
+	# Save where we came from so we can return.
+	var cs := get_tree().current_scene
+	_dungeon_return_scene_path = (cs.scene_file_path if cs != null else "")
+	_pending_dungeon_id = dungeon_id
+
+	# Ensure no overlays remain above the new scene.
+	clear_popup_root_children()
+
+	# Change to the dungeon-only scene.
+	get_tree().change_scene_to_file("res://scenes/ui/DungeonScene.tscn") # <- adjust path to your project
+
+func pop_pending_dungeon_id() -> String:
+	var id := _pending_dungeon_id
+	_pending_dungeon_id = ""
+	return id
+
+func return_from_dungeon_scene() -> void:
+	clear_popup_root_children()
+	if _dungeon_return_scene_path != "":
+		get_tree().change_scene_to_file(_dungeon_return_scene_path)
+	else:
+		# Fallback if current scene had no file path (rare)
+		get_tree().change_scene_to_file("res://scenes/Home.tscn") # <- adjust

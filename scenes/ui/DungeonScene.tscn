@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://s16oq80vmbj0"]
+
+[ext_resource type="Script" uid="uid://b0j6m6i7t0akd" path="res://scenes/ui/DungeonScene.gd" id="1_h2yn2"]
+
+[node name="DungeonScene" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_h2yn2")

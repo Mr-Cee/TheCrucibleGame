@@ -56,6 +56,7 @@ var crucible_upgrade_finish_unix: int = 0  # unix seconds; 0 means "no timer run
 @export var last_active_unix: int = 0
 
 # ============== Class / Skills (MVP) ==================
+
 # Tracks the player's selected node in the class tree (e.g. "warrior", "knight", etc.)
 @export var class_def_id: String = ""
 const ACTIVE_SKILL_SLOTS: int = 5
@@ -67,6 +68,149 @@ const ACTIVE_SKILL_SLOTS: int = 5
 
 # ====================== Tasks ==========================
 var task_state: Dictionary = {}
+
+# ================== Dungeons =================================
+# ============== Dungeons =======================
+@export var dungeon_keys: Dictionary = {}     # dungeon_id -> key count
+@export var dungeon_levels: Dictionary = {}   # dungeon_id -> current level (next attempt), starts at 1
+
+# =================================================================================================
+
+func to_dict() -> Dictionary:
+	var eq_out: Dictionary = {}
+	for k in equipped.keys():
+		var slot_id: int = int(k)
+		var item: GearItem = equipped.get(slot_id, null)
+		eq_out[str(slot_id)] = item.to_dict() if item != null else null
+
+	return {
+		"character_name": character_name,
+		"gold": gold,
+		"diamonds": diamonds,
+		"crystals": crystals,
+		"time_vouchers": time_vouchers,
+		"level": level,
+		"xp": xp,
+		"class_id": class_id,
+		"class_def_id": class_def_id,
+		"skill_levels": skill_levels,
+		"skill_progress": skill_progress,
+		"equipped_active_skills": equipped_active_skills,
+		"equipped_passive_skills": equipped_passive_skills,
+		"skill_auto": skill_auto,
+		"crucible_keys": crucible_keys,
+		"crucible_level": crucible_level,
+		"skill_tickets": skill_tickets,
+		"skill_gen_level": skill_gen_level,
+		"skill_gen_xp": skill_gen_xp,
+		"skill_ad_draws_used_today": skill_ad_draws_used_today,
+		"skill_ad_draws_day_key": skill_ad_draws_day_key,
+		"equipped": eq_out,
+		"deferred_gear": deferred_gear,
+		"crucible_batch": crucible_batch,
+		"crucible_rarity_min": crucible_rarity_min,
+		"crucible_auto_sell_below": crucible_auto_sell_below,
+		"crucible_upgrade_paid_stages": crucible_upgrade_paid_stages,
+		"crucible_upgrade_target_level": crucible_upgrade_target_level,
+		"crucible_upgrade_finish_unix": crucible_upgrade_finish_unix,
+		"last_active_unix": last_active_unix,
+		#Unlocks
+		"premium_offline_unlocked": premium_offline_unlocked,
+		"battlepass_expires_unix": battlepass_expires_unix,
+		"task_state": task_state,
+		"dungeon_keys": dungeon_keys,
+		"dungeon_levels": dungeon_levels,
+
+	}
+
+static func from_dict(d: Dictionary) -> PlayerModel:
+	var p := PlayerModel.new()
+	p.character_name = String(d.get("character_name", ""))
+	p.gold = int(d.get("gold", 0))
+	p.diamonds = int(d.get("diamonds", 0))
+	p.crystals = int(d.get("crystals", 0))
+	p.time_vouchers = int(d.get("time_vouchers", 0))
+	p.level = int(d.get("level", 1))
+	p.xp = int(d.get("xp", 0))
+	p.class_id = int(d.get("class_id", 0))
+	p.class_def_id = String(d.get("class_def_id", ""))
+	
+	p.skill_auto = bool(d.get("skill_auto", true))
+
+	var eav: Variant = d.get("equipped_active_skills", [])
+	p.equipped_active_skills = []
+	if typeof(eav) == TYPE_ARRAY:
+		for v in (eav as Array):
+			p.equipped_active_skills.append(String(v))
+
+	# support legacy misspelling if it exists
+	var slv: Variant = d.get("skill_levels", null)
+	if slv == null:
+		slv = d.get("skill_levls", {})
+	p.skill_levels = slv as Dictionary if typeof(slv) == TYPE_DICTIONARY else {}
+
+	var spv: Variant = d.get("skill_progress", {})
+	p.skill_progress = spv as Dictionary if typeof(spv) == TYPE_DICTIONARY else {}
+
+	p.ensure_active_skills_initialized()
+
+
+	
+	p.crucible_keys = int(d.get("crucible_keys", 0))
+	p.crucible_level = int(d.get("crucible_level", 1))
+	p.crucible_batch = int(d.get("crucible_batch", 1))
+	p.crucible_rarity_min = int(d.get("crucible_rarity_min", Catalog.Rarity.COMMON))
+	p.crucible_auto_sell_below = bool(d.get("crucible_auto_sell_below", true))
+	p.crucible_upgrade_paid_stages = int(d.get("crucible_upgrade_paid_stages", 0))
+	p.crucible_upgrade_target_level = int(d.get("crucible_upgrade_target_level", 0))
+	p.crucible_upgrade_finish_unix = int(d.get("crucible_upgrade_finish_unix", 0))
+	p.last_active_unix = int(d.get("last_active_unix", 0))
+	p.premium_offline_unlocked = bool(d.get("premium_offline_unlocked", false))
+	p.battlepass_expires_unix = int(d.get("battlepass_expires_unix", 0))
+	p.skill_tickets = int(d.get("skill_tickets", 0))
+	p.skill_gen_level = int(d.get("skill_gen_level", 1))
+	p.skill_gen_xp = int(d.get("skill_gen_xp", 0))
+	p.skill_ad_draws_used_today = int(d.get("skill_ad_draws_used_today", 0))
+	p.skill_ad_draws_day_key = int(d.get("skill_ad_draws_day_key", 0))
+	p.ensure_skill_generator_initialized()
+	p.task_state = d.get("task_state", {})
+	
+	# Dungeons
+	var dk: Variant = d.get("dungeon_keys", {})
+	p.dungeon_keys = dk as Dictionary if typeof(dk) == TYPE_DICTIONARY else {}
+
+	var dl: Variant = d.get("dungeon_levels", {})
+	p.dungeon_levels = dl as Dictionary if typeof(dl) == TYPE_DICTIONARY else {}
+
+
+	var dg: Variant = d.get("deferred_gear", [])
+	p.deferred_gear = []
+	if typeof(dg) == TYPE_ARRAY:
+		for v in dg:
+			if v != null and typeof(v) == TYPE_DICTIONARY:
+				p.deferred_gear.append(v as Dictionary)
+
+
+	# Ensure equipped exists for all slots
+	p.equipped = {}
+	for slot_id in Catalog.GEAR_SLOT_NAMES.keys():
+		p.equipped[int(slot_id)] = null
+
+	var eqv: Variant = d.get("equipped", {})
+	if typeof(eqv) == TYPE_DICTIONARY:
+		var eqd: Dictionary = eqv
+		for sk in eqd.keys():
+			var slot: int = int(sk)
+			var iv: Variant = eqd[sk]
+			if iv == null:
+				p.equipped[slot] = null
+			elif typeof(iv) == TYPE_DICTIONARY:
+				p.equipped[slot] = GearItem.from_dict(iv as Dictionary)
+				
+	p.ensure_class_and_skills_initialized()
+	# Ensure name exists for older saves / new games.
+	p.ensure_name_initialized()
+	return p
 
 
 
@@ -134,137 +278,6 @@ func combat_power() -> int:
 	cp += (s.block + s.avoidance) * 10.0
 	cp += (s.crit_chance + s.combo_chance) * 8.0
 	return int(round(cp))
-
-func to_dict() -> Dictionary:
-	var eq_out: Dictionary = {}
-	for k in equipped.keys():
-		var slot_id: int = int(k)
-		var item: GearItem = equipped.get(slot_id, null)
-		eq_out[str(slot_id)] = item.to_dict() if item != null else null
-
-	return {
-		"character_name": character_name,
-		"gold": gold,
-		"diamonds": diamonds,
-		"crystals": crystals,
-		"time_vouchers": time_vouchers,
-		"level": level,
-		"xp": xp,
-		"class_id": class_id,
-		"class_def_id": class_def_id,
-		"skill_levels": skill_levels,
-		"skill_progress": skill_progress,
-		"equipped_active_skills": equipped_active_skills,
-		"equipped_passive_skills": equipped_passive_skills,
-		"skill_auto": skill_auto,
-		"crucible_keys": crucible_keys,
-		"crucible_level": crucible_level,
-		"skill_tickets": skill_tickets,
-		"skill_gen_level": skill_gen_level,
-		"skill_gen_xp": skill_gen_xp,
-		"skill_ad_draws_used_today": skill_ad_draws_used_today,
-		"skill_ad_draws_day_key": skill_ad_draws_day_key,
-		"equipped": eq_out,
-		"deferred_gear": deferred_gear,
-		"crucible_batch": crucible_batch,
-		"crucible_rarity_min": crucible_rarity_min,
-		"crucible_auto_sell_below": crucible_auto_sell_below,
-		"crucible_upgrade_paid_stages": crucible_upgrade_paid_stages,
-		"crucible_upgrade_target_level": crucible_upgrade_target_level,
-		"crucible_upgrade_finish_unix": crucible_upgrade_finish_unix,
-		"last_active_unix": last_active_unix,
-		#Unlocks
-		"premium_offline_unlocked": premium_offline_unlocked,
-		"battlepass_expires_unix": battlepass_expires_unix,
-		"task_state": task_state,
-		
-
-	}
-
-static func from_dict(d: Dictionary) -> PlayerModel:
-	var p := PlayerModel.new()
-	p.character_name = String(d.get("character_name", ""))
-	p.gold = int(d.get("gold", 0))
-	p.diamonds = int(d.get("diamonds", 0))
-	p.crystals = int(d.get("crystals", 0))
-	p.time_vouchers = int(d.get("time_vouchers", 0))
-	p.level = int(d.get("level", 1))
-	p.xp = int(d.get("xp", 0))
-	p.class_id = int(d.get("class_id", 0))
-	p.class_def_id = String(d.get("class_def_id", ""))
-	
-	p.skill_auto = bool(d.get("skill_auto", true))
-
-	var eav: Variant = d.get("equipped_active_skills", [])
-	p.equipped_active_skills = []
-	if typeof(eav) == TYPE_ARRAY:
-		for v in (eav as Array):
-			p.equipped_active_skills.append(String(v))
-
-	# support legacy misspelling if it exists
-	var slv: Variant = d.get("skill_levels", null)
-	if slv == null:
-		slv = d.get("skill_levls", {})
-	p.skill_levels = slv as Dictionary if typeof(slv) == TYPE_DICTIONARY else {}
-
-	var spv: Variant = d.get("skill_progress", {})
-	p.skill_progress = spv as Dictionary if typeof(spv) == TYPE_DICTIONARY else {}
-
-	p.ensure_active_skills_initialized()
-
-
-	
-	p.crucible_keys = int(d.get("crucible_keys", 0))
-	p.crucible_level = int(d.get("crucible_level", 1))
-	p.crucible_batch = int(d.get("crucible_batch", 1))
-	p.crucible_rarity_min = int(d.get("crucible_rarity_min", Catalog.Rarity.COMMON))
-	p.crucible_auto_sell_below = bool(d.get("crucible_auto_sell_below", true))
-	p.crucible_upgrade_paid_stages = int(d.get("crucible_upgrade_paid_stages", 0))
-	p.crucible_upgrade_target_level = int(d.get("crucible_upgrade_target_level", 0))
-	p.crucible_upgrade_finish_unix = int(d.get("crucible_upgrade_finish_unix", 0))
-	p.last_active_unix = int(d.get("last_active_unix", 0))
-	
-	p.premium_offline_unlocked = bool(d.get("premium_offline_unlocked", false))
-	p.battlepass_expires_unix = int(d.get("battlepass_expires_unix", 0))
-	
-	p.skill_tickets = int(d.get("skill_tickets", 0))
-	p.skill_gen_level = int(d.get("skill_gen_level", 1))
-	p.skill_gen_xp = int(d.get("skill_gen_xp", 0))
-	p.skill_ad_draws_used_today = int(d.get("skill_ad_draws_used_today", 0))
-	p.skill_ad_draws_day_key = int(d.get("skill_ad_draws_day_key", 0))
-	p.ensure_skill_generator_initialized()
-
-	p.task_state = d.get("task_state", {})
-
-
-	var dg: Variant = d.get("deferred_gear", [])
-	p.deferred_gear = []
-	if typeof(dg) == TYPE_ARRAY:
-		for v in dg:
-			if v != null and typeof(v) == TYPE_DICTIONARY:
-				p.deferred_gear.append(v as Dictionary)
-
-
-	# Ensure equipped exists for all slots
-	p.equipped = {}
-	for slot_id in Catalog.GEAR_SLOT_NAMES.keys():
-		p.equipped[int(slot_id)] = null
-
-	var eqv: Variant = d.get("equipped", {})
-	if typeof(eqv) == TYPE_DICTIONARY:
-		var eqd: Dictionary = eqv
-		for sk in eqd.keys():
-			var slot: int = int(sk)
-			var iv: Variant = eqd[sk]
-			if iv == null:
-				p.equipped[slot] = null
-			elif typeof(iv) == TYPE_DICTIONARY:
-				p.equipped[slot] = GearItem.from_dict(iv as Dictionary)
-				
-	p.ensure_class_and_skills_initialized()
-	# Ensure name exists for older saves / new games.
-	p.ensure_name_initialized()
-	return p
 
 func xp_required_for_next_level() -> int:
 	# Simple exponential curve (tune later).
