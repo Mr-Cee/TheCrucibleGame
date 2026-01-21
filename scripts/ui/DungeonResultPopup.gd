@@ -3,8 +3,11 @@ class_name DungeonResultPopup
 
 signal closed
 
-# Icon you already have for the Crucible draw key
+# Icons / art
 const PATH_CRUCIBLE_KEY_ICON: String = "res://assets/icons/UI/keys/crucible_key_main.png"
+const PATH_RIBBON_CONGRATS: String = "res://assets/panels/ribbon_congratulations.png"
+
+var _tex_ribbon_congrats: Texture2D = null
 
 var _dim: ColorRect
 var _panel: PanelContainer
@@ -43,6 +46,8 @@ func _ready() -> void:
 	z_index = 5000
 	z_as_relative = false
 
+	_tex_ribbon_congrats = _safe_load_tex(PATH_RIBBON_CONGRATS)
+
 	# Dim (clicking outside closes)
 	_dim = ColorRect.new()
 	_dim.color = Color(0, 0, 0, 0.85)
@@ -59,11 +64,11 @@ func _ready() -> void:
 
 	# Panel (the “rewards panel”)
 	_panel = PanelContainer.new()
-	_panel.custom_minimum_size = Vector2(520, 320)
+	_panel.custom_minimum_size = Vector2(560, 360)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	center.add_child(_panel)
 
-	# Panel style (soft, warm-ish like the screenshots)
+	# Panel style (warm / celebratory)
 	var panel_sb := StyleBoxFlat.new()
 	panel_sb.bg_color = Color(0.12, 0.10, 0.08, 0.92)
 	panel_sb.corner_radius_top_left = 18
@@ -85,6 +90,10 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", 12)
 	margin.add_child(root)
 
+	# Ribbon header (top of results panel)
+	root.add_child(_build_congrats_ribbon())
+
+	# Fallback title (hidden when ribbon is present)
 	_title = Label.new()
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title.add_theme_font_size_override("font_size", 26)
@@ -144,11 +153,33 @@ func _ready() -> void:
 
 	_apply()
 
+func _build_congrats_ribbon() -> Control:
+	var wrap := Control.new()
+	wrap.custom_minimum_size = Vector2(0, 110)
+	wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	if _tex_ribbon_congrats != null:
+		var ribbon := TextureRect.new()
+		ribbon.texture = _tex_ribbon_congrats
+		ribbon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		ribbon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ribbon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ribbon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		wrap.add_child(ribbon)
+
+	return wrap
+
 func _apply() -> void:
 	if _title == null:
 		return
 
-	_title.text = "Congrats" if _pending_success else "Result"
+	# Hide fallback title when the ribbon exists
+	if _tex_ribbon_congrats != null:
+		_title.visible = false
+	else:
+		_title.visible = true
+		_title.text = "Congratulations" if _pending_success else "Result"
 
 	# Clear rewards
 	for c in _grid.get_children():
@@ -191,7 +222,7 @@ func _build_reward_tile(reward_key: String, amount: int) -> Control:
 	btn.tooltip_text = _reward_tooltip_text(reward_key)
 	btn.pressed.connect(_on_reward_pressed.bind(reward_key, btn))
 
-	# Purple-ish tile style like the screenshot rewards
+	# Tile style
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.30, 0.18, 0.40, 0.90)
 	sb.corner_radius_top_left = 12
@@ -264,14 +295,12 @@ func _on_reward_pressed(reward_key: String, btn: Control) -> void:
 	var r: Rect2 = btn.get_global_rect()
 	var vp: Vector2 = get_viewport_rect().size
 
-	# Try to place below; if it would clip, place above
 	var tip_size: Vector2 = _tip_panel.get_combined_minimum_size()
 	var pos := r.position + Vector2(r.size.x * 0.5 - tip_size.x * 0.5, r.size.y + 10)
 
 	if pos.y + tip_size.y > vp.y - 8:
 		pos.y = r.position.y - tip_size.y - 10
 
-	# Clamp within viewport
 	pos.x = clampf(pos.x, 8.0, vp.x - tip_size.x - 8.0)
 	pos.y = clampf(pos.y, 8.0, vp.y - tip_size.y - 8.0)
 
@@ -282,7 +311,7 @@ func _hide_tip() -> void:
 	_tip_visible_for_key = ""
 
 func _on_dim_gui_input(event: InputEvent) -> void:
-	# Clicking outside the rewards panel closes (matches your other panels)
+	# Clicking outside the rewards panel closes
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_close()
 		accept_event()
