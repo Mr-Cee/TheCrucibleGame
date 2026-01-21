@@ -75,6 +75,9 @@ var task_state: Dictionary = {}
 @export var dungeon_levels: Dictionary = {}   # dungeon_id -> current level (next attempt), starts at 1
 @export var dungeon_daily_reset_day_key: int = 0   # UTC day key = unix / 86400
 
+# Tracks the last UTC day index we applied the dungeon daily reset for. # (UTC day index = floor(unix_time / 86400))
+var dungeon_last_reset_day: int = -1
+
 # =================================================================================================
 
 func to_dict() -> Dictionary:
@@ -122,6 +125,7 @@ func to_dict() -> Dictionary:
 		"dungeon_keys": dungeon_keys,
 		"dungeon_levels": dungeon_levels,
 		"dungeon_daily_reset_day_key": dungeon_daily_reset_day_key,
+		"dungeon_last_reset_day": dungeon_last_reset_day,
 
 	}
 
@@ -183,6 +187,7 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	var dl: Variant = d.get("dungeon_levels", {})
 	p.dungeon_levels = dl as Dictionary if typeof(dl) == TYPE_DICTIONARY else {}
 	p.dungeon_daily_reset_day_key = int(d.get("dungeon_daily_reset_day_key", 0))
+	p.dungeon_last_reset_day = int(d.get("dungeon_last_reset_day", -1))
 
 
 	var dg: Variant = d.get("deferred_gear", [])

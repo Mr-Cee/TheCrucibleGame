@@ -30,7 +30,6 @@ var _popup_hover_index: int = -1
 var testNum: int = 1
 
 
-
 func _ready() -> void:
 	top_level = true
 	set_anchors_preset(Control.PRESET_FULL_RECT)

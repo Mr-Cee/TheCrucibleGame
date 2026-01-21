@@ -21,6 +21,7 @@ var _reset_time_lbl: Label = null
 var _ticker: Timer = null
 
 func _ready() -> void:
+	#top_level = true
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	offset_left = 0
 	offset_top = 0
@@ -256,6 +257,8 @@ func _refresh() -> void:
 		var cur_level: int = 1
 		var key_count: int = 0
 		var reward_preview: Dictionary = {}
+		
+		var key_cap: int = 5
 
 		if _game != null and ("dungeon_system" in _game) and _game.dungeon_system != null:
 			var ds: Object = _game.dungeon_system
@@ -263,13 +266,18 @@ func _refresh() -> void:
 				cur_level = int(ds.call("get_current_level", did))
 			if ds.has_method("get_key_count"):
 				key_count = int(ds.call("get_key_count", did))
+			if ds.has_method("daily_key_cap"):
+				key_cap = int(ds.call("daily_key_cap", did))
 			# Reward preview for current level (optional but nice)
 			if ds.has_method("reward_for_level"):
 				reward_preview = ds.call("reward_for_level", did, cur_level)
+				
+		
 
-		_list_vbox.add_child(_build_dungeon_card(did, def, cur_level, key_count, reward_preview))
+		_list_vbox.add_child(_build_dungeon_card(did, def, cur_level, key_count, key_cap))
 
-func _build_dungeon_card(dungeon_id: String, def: DungeonDef, cur_level: int, key_count: int, reward_preview: Dictionary) -> Control:
+
+func _build_dungeon_card(dungeon_id: String, def: DungeonDef, cur_level: int, key_count: int, key_cap: int) -> Control:
 	var card := PanelContainer.new()
 
 	# Card base style
@@ -347,7 +355,7 @@ func _build_dungeon_card(dungeon_id: String, def: DungeonDef, cur_level: int, ke
 	keys_row.add_child(key_icon)
 
 	var key_lbl := Label.new()
-	key_lbl.text = "%d" % key_count               # no "Crucible Dungeon Key:"
+	key_lbl.text = "%d/%d" % [key_count, key_cap]		# no "Crucible Dungeon Key:"
 	key_lbl.add_theme_font_size_override("font_size", 16)
 	key_lbl.add_theme_color_override("font_color", Color(0.96, 0.96, 0.96, 1.0))
 	keys_row.add_child(key_lbl)

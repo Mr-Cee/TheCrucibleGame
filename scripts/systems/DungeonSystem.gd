@@ -205,40 +205,6 @@ func next_daily_reset_unix(now_unix: int = -1) -> int:
 	var day_key := _utc_day_key(now_unix)
 	return (day_key + 1) * SECONDS_PER_DAY
 
-func seconds_until_daily_reset(now_unix: int = -1) -> int:
-	if now_unix < 0:
-		now_unix = int(Time.get_unix_time_from_system())
-	return maxi(0, next_daily_reset_unix(now_unix) - now_unix)
-
-func ensure_daily_reset(now_unix: int = -1) -> bool:
-	if _player == null:
-		return false
-
-	_ensure_player_fields()
-
-	if now_unix < 0:
-		now_unix = int(Time.get_unix_time_from_system())
-
-	var today_key: int = _utc_day_key(now_unix)
-	var last_key: int = int(_player.dungeon_daily_reset_day_key)
-
-	# First-time init (older saves / new players)
-	if last_key <= 0:
-		_player.dungeon_daily_reset_day_key = today_key
-		_grant_daily_keys(1) # give today’s keys immediately
-		_notify_changed()
-		return true
-
-	# No reset needed yet (or clock skew backward)
-	if today_key <= last_key:
-		return false
-
-	var days_elapsed: int = today_key - last_key
-	_player.dungeon_daily_reset_day_key = today_key
-	_grant_daily_keys(days_elapsed)
-	_notify_changed()
-	return true
-
 func _grant_daily_keys(days: int) -> void:
 	if days <= 0:
 		return
@@ -255,3 +221,45 @@ func _notify_changed() -> void:
 	# Ensure UI + saves refresh (Game listens to player_changed heavily)
 	if _game != null and _game.has_signal("player_changed"):
 		_game.emit_signal("player_changed")
+
+const SECONDS_PER_DAY_UTC: int = 86400
+const DAILY_DUNGEON_KEY_CAP: int = 5
+
+func daily_key_cap(_dungeon_id: String) -> int:
+	return DAILY_DUNGEON_KEY_CAP
+
+func seconds_until_daily_reset() -> int:
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	var day_key: int = int(now_unix / SECONDS_PER_DAY_UTC)
+	var next_unix: int = (day_key + 1) * SECONDS_PER_DAY_UTC
+	return maxi(0, next_unix - now_unix)
+
+func ensure_daily_reset() -> void:
+	_ensure_player_fields()
+	if _player == null:
+		return
+
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	var today_day_key: int = int(now_unix / SECONDS_PER_DAY_UTC)
+
+	# Already applied for this UTC day
+	if _player.dungeon_last_reset_day == today_day_key:
+		return
+
+	_player.dungeon_last_reset_day = today_day_key
+
+	var changed_any: bool = false
+	for did in DungeonCatalog.all_ids():
+		var cap: int = daily_key_cap(did)
+		var cur: int = get_key_count(did)
+
+		# Only top-off missing keys up to cap
+		if cur < cap:
+			_player.dungeon_keys[did] = cap
+			changed_any = true
+
+	if changed_any:
+		changed.emit()
+		# If your UI is listening to Game.player_changed, forward it.
+		if _game != null and _game.has_signal("player_changed"):
+			_game.player_changed.emit()
