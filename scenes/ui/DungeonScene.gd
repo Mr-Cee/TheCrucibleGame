@@ -57,8 +57,13 @@ func _ready() -> void:
 		return
 
 	# Listen for completion so we can return automatically.
-	if not Game.dungeon_finished.is_connected(_on_dungeon_finished):
-		Game.dungeon_finished.connect(_on_dungeon_finished)
+	var finisher: Object = Game
+	if Game.battle_system != null and Game.battle_system.has_signal("dungeon_finished"):
+		finisher = Game.battle_system
+
+	if not finisher.is_connected("dungeon_finished", Callable(self, "_on_dungeon_finished")):
+		finisher.connect("dungeon_finished", Callable(self, "_on_dungeon_finished"))
+
 		
 	# Combat log wiring
 	if not Game.combat_log_cleared.is_connected(_on_combat_log_cleared):
@@ -78,11 +83,15 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	# Avoid dangling signal connections when changing scenes.
-	if Game != null and Game.dungeon_finished.is_connected(_on_dungeon_finished):
-		Game.dungeon_finished.disconnect(_on_dungeon_finished)
+	var finisher: Object = Game
+	if Game != null and Game.battle_system != null and Game.battle_system.has_signal("dungeon_finished"):
+		finisher = Game.battle_system
+
+	if finisher != null and finisher.is_connected("dungeon_finished", Callable(self, "_on_dungeon_finished")):
+		finisher.disconnect("dungeon_finished", Callable(self, "_on_dungeon_finished"))
+		
 	if Game != null and Game.combat_log_cleared.is_connected(_on_combat_log_cleared):
 		Game.combat_log_cleared.disconnect(_on_combat_log_cleared)
-
 	if Game != null and Game.combat_log_entry_added.is_connected(_on_combat_log_entry_added):
 		Game.combat_log_entry_added.disconnect(_on_combat_log_entry_added)
 
@@ -496,8 +505,14 @@ func _on_cancel_pressed() -> void:
 	# If for any reason it doesn't, we still force-return:
 	Game.return_from_dungeon_scene()
 
-func _on_dungeon_finished(_dungeon_id: String, _attempted_level: int, _success: bool, _reward: Dictionary) -> void:
+func _on_dungeon_finished(dungeon_id: String, attempted_level: int, success: bool, reward: Dictionary) -> void:
+	# Duplicate to avoid any reference surprises
+	var r: Dictionary = reward.duplicate(true)
+
+	# Return first (swap scenes), then show popup next frame so it can't be instantly "dim-click closed"
 	Game.return_from_dungeon_scene()
+	Game.call_deferred("show_dungeon_result_popup", dungeon_id, attempted_level, success, r)
+
 
 func _player_sprite_key_from_player() -> String:
 	# Default

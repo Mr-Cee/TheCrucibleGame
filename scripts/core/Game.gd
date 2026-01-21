@@ -614,3 +614,22 @@ func return_from_dungeon_scene() -> void:
 	else:
 		# Fallback if current scene had no file path (rare)
 		get_tree().change_scene_to_file("res://scenes/Home.tscn") # <- adjust
+
+func show_dungeon_result_popup(dungeon_id: String, attempted_level: int, success: bool, reward: Dictionary) -> void:
+	var ui := popup_root()
+	var p := DungeonResultPopup.new()
+	p.setup(dungeon_id, attempted_level, success, reward)
+
+	# When results close, reopen the dungeon list panel
+	if not p.closed.is_connected(_on_dungeon_result_popup_closed):
+		p.closed.connect(_on_dungeon_result_popup_closed)
+
+	ui.add_child(p)
+
+func _on_dungeon_result_popup_closed() -> void:
+	open_dungeon_panel()
+
+func open_dungeon_panel() -> void:
+	var ui := popup_root()
+	var panel := DungeonsPanel.new() # rename if your class_name differs
+	ui.add_child(panel)

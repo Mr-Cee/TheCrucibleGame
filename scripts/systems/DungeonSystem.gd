@@ -169,7 +169,6 @@ func _consume_key(dungeon_id: String) -> bool:
 	_player.dungeon_keys[dungeon_id] = k - 1
 	return true
 
-
 func get_def(dungeon_id: String) -> DungeonDef:
 	return DungeonCatalog.get_def(dungeon_id)
 	
