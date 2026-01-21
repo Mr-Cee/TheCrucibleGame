@@ -5,11 +5,23 @@ signal changed
 
 var _game: Node = null
 var _player: PlayerModel = null
+const SECONDS_PER_DAY: int = 86400
+const DAILY_RESET_KEYS_GRANTED: int = 5
+
+var _daily_reset_accum: float = 0.0
+
 
 func setup(game: Node, player: PlayerModel) -> void:
 	_game = game
 	_player = player
 	_ensure_player_fields()
+	ensure_daily_reset() # apply immediately on boot (handles missed days)
+
+func _process(delta: float) -> void:
+	_daily_reset_accum += delta
+	if _daily_reset_accum >= 1.0:
+		_daily_reset_accum = 0.0
+		ensure_daily_reset()
 
 func _ensure_player_fields() -> void:
 	if _player == null:
@@ -183,3 +195,63 @@ func enemy_damage_mult(dungeon_id: String) -> float:
 	if def == null:
 		return 1.0
 	return clampf(float(def.enemy_damage_mult), 0.0, 10.0)
+
+func _utc_day_key(unix_time: int) -> int:
+	return int(unix_time / SECONDS_PER_DAY) # day boundary at 00:00 UTC
+
+func next_daily_reset_unix(now_unix: int = -1) -> int:
+	if now_unix < 0:
+		now_unix = int(Time.get_unix_time_from_system())
+	var day_key := _utc_day_key(now_unix)
+	return (day_key + 1) * SECONDS_PER_DAY
+
+func seconds_until_daily_reset(now_unix: int = -1) -> int:
+	if now_unix < 0:
+		now_unix = int(Time.get_unix_time_from_system())
+	return maxi(0, next_daily_reset_unix(now_unix) - now_unix)
+
+func ensure_daily_reset(now_unix: int = -1) -> bool:
+	if _player == null:
+		return false
+
+	_ensure_player_fields()
+
+	if now_unix < 0:
+		now_unix = int(Time.get_unix_time_from_system())
+
+	var today_key: int = _utc_day_key(now_unix)
+	var last_key: int = int(_player.dungeon_daily_reset_day_key)
+
+	# First-time init (older saves / new players)
+	if last_key <= 0:
+		_player.dungeon_daily_reset_day_key = today_key
+		_grant_daily_keys(1) # give today’s keys immediately
+		_notify_changed()
+		return true
+
+	# No reset needed yet (or clock skew backward)
+	if today_key <= last_key:
+		return false
+
+	var days_elapsed: int = today_key - last_key
+	_player.dungeon_daily_reset_day_key = today_key
+	_grant_daily_keys(days_elapsed)
+	_notify_changed()
+	return true
+
+func _grant_daily_keys(days: int) -> void:
+	if days <= 0:
+		return
+
+	var add_amount: int = DAILY_RESET_KEYS_GRANTED * days
+
+	# Add keys to each known dungeon (per-dungeon attempts model).
+	for did in DungeonCatalog.all_ids():
+		var cur: int = maxi(0, int(_player.dungeon_keys.get(did, 0)))
+		_player.dungeon_keys[did] = cur + add_amount
+
+func _notify_changed() -> void:
+	changed.emit()
+	# Ensure UI + saves refresh (Game listens to player_changed heavily)
+	if _game != null and _game.has_signal("player_changed"):
+		_game.emit_signal("player_changed")
