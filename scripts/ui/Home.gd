@@ -803,7 +803,6 @@ func open_voucher_popup() -> void:
 func _on_dungeons_pressed() -> void:
 	var panel := DungeonsPanel.new()
 	Game.popup_root().add_child(panel) # <-- critical
-	panel.open()
 
 func _vp_seconds_remaining() -> int:
 	return int(Game.crucible_upgrade_seconds_remaining())
