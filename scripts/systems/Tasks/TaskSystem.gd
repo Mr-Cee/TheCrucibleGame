@@ -39,7 +39,6 @@ func current_text() -> String:
 
 	return def.format_text(progress, _state.required)
 
-
 func is_complete() -> bool:
 	var def := _current_task()
 	if def == null:
@@ -51,8 +50,6 @@ func is_complete() -> bool:
 		return int(_player.level) >= _state.required
 
 	return _state.required > 0 and _state.progress >= _state.required
-
-
 # -------------------------
 # Event hooks
 # -------------------------
@@ -207,7 +204,6 @@ func _build_default_tasks() -> void:
 	_add_task("crucible_draws", TaskDef.Kind.CRUCIBLE_DRAWS, 5, 2)
 	_add_task("skill_draws", TaskDef.Kind.SKILL_DRAWS, 3, 1)
 	_add_task("level_ups", TaskDef.Kind.LEVEL_UPS, 10, 1)
-
 
 func _add_task(id: String, kind: int, base_req: int, step_req: int) -> void:
 	var t := TaskDef.new()

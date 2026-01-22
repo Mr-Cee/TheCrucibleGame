@@ -8,11 +8,17 @@ const PATH_RIBBON: String = "res://assets/panels/ribbon_dungeons.png"
 const PATH_KEY_DUNGEON_CRUCIBLE: String = "res://assets/icons/UI/keys/dungeon_key_crucible.png"
 const PATH_KEY_CRUCIBLE: String = "res://assets/icons/UI/keys/crucible_key_main.png"
 const PATH_BANNER_CRUCIBLE_WARDEN: String = "res://assets/panels/dungeon_banner_crucible_warden.png"
+const PATH_KEY_DUNGEON_MOLTEN: String = "res://assets/icons/UI/keys/dungeon_key_molten_guardian.png"
+const PATH_BANNER_MOLTEN_GUARDIAN: String = "res://assets/panels/dungeon_banner_molten_guardian.png"
+
 
 var _tex_ribbon: Texture2D = null
 var _tex_dungeon_key_crucible: Texture2D = null
 var _tex_crucible_key: Texture2D = null
 var _tex_banner_crucible: Texture2D = null
+var _tex_dungeon_key_molten: Texture2D = null
+var _tex_banner_molten: Texture2D = null
+
 
 var _game: Node = null
 
@@ -54,6 +60,9 @@ func _load_textures() -> void:
 	_tex_dungeon_key_crucible = _safe_load_tex(PATH_KEY_DUNGEON_CRUCIBLE)
 	_tex_crucible_key = _safe_load_tex(PATH_KEY_CRUCIBLE)
 	_tex_banner_crucible = _safe_load_tex(PATH_BANNER_CRUCIBLE_WARDEN)
+	_tex_dungeon_key_molten = _safe_load_tex(PATH_KEY_DUNGEON_MOLTEN)
+	_tex_banner_molten = _safe_load_tex(PATH_BANNER_MOLTEN_GUARDIAN)
+
 
 func _safe_load_tex(path: String) -> Texture2D:
 	if ResourceLoader.exists(path):
@@ -297,10 +306,15 @@ func _build_dungeon_card(dungeon_id: String, def: DungeonDef, cur_level: int, ke
 	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.add_child(stack)
 
-	# Banner only for Crucible Warden dungeon slot (adjust your ID check if needed)
-	if _is_crucible_warden_dungeon(dungeon_id) and _tex_banner_crucible != null:
+	var banner_tex: Texture2D = null
+	if _is_crucible_warden_dungeon(dungeon_id):
+		banner_tex = _tex_banner_crucible
+	elif _is_molten_dungeon(dungeon_id):
+		banner_tex = _tex_banner_molten
+
+	if banner_tex != null:
 		var banner := TextureRect.new()
-		banner.texture = _tex_banner_crucible
+		banner.texture = banner_tex
 		banner.set_anchors_preset(Control.PRESET_FULL_RECT)
 		banner.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		banner.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -313,6 +327,7 @@ func _build_dungeon_card(dungeon_id: String, def: DungeonDef, cur_level: int, ke
 		overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 		overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		stack.add_child(overlay)
+
 
 	# Foreground content margin
 	var m := MarginContainer.new()
@@ -382,12 +397,20 @@ func _is_crucible_warden_dungeon(dungeon_id: String) -> bool:
 	# Match whichever ID you used for this dungeon; these heuristics catch common variants.
 	return s.contains("crucible") or s.contains("warden")
 
+func _is_molten_dungeon(dungeon_id: String) -> bool:
+	var s := dungeon_id.to_lower()
+	# Covers typical ids like "molten_depths", "molten_guardian_dungeon", etc.
+	return s.contains("molten") or s.contains("depths") or s.contains("guardian")
+
 func _key_icon_for_dungeon(dungeon_id: String) -> Texture2D:
-	# For now, you only provided the crucible dungeon key image.
-	# When you add more dungeons, you can add per-dungeon icons here.
 	if _is_crucible_warden_dungeon(dungeon_id) and _tex_dungeon_key_crucible != null:
 		return _tex_dungeon_key_crucible
+	if _is_molten_dungeon(dungeon_id) and _tex_dungeon_key_molten != null:
+		return _tex_dungeon_key_molten
+
+	# Fallback: pick something sensible (crucible icon if available)
 	return _tex_dungeon_key_crucible
+
 
 func _badge_color_for_dungeon(dungeon_id: String) -> Color:
 	var s := dungeon_id.to_lower()

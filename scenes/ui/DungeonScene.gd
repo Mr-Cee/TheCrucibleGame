@@ -432,8 +432,8 @@ func _refresh() -> void:
 	_e_bar.value = e_hp
 
 	var enemy_name: String = String(rt.get("enemy_name", "Boss"))
-	_e_lbl.text = "%s HP: %d / %d" % [enemy_name, int(round(e_hp)), int(round(e_max))]
-	
+	var enemy_label_name := enemy_name
+
 	var did: String = String(rt.get("dungeon_id", ""))
 	var dlvl: int = int(rt.get("dungeon_level", 0))
 
@@ -442,8 +442,17 @@ func _refresh() -> void:
 	else:
 		_title.text = "Dungeon"
 
-	_subtitle.text = "%s" % enemy_name
+	var w_total: int = int(rt.get("dungeon_waves_total", 1))
+	var w_idx: int = int(rt.get("dungeon_wave_idx", 0))
+	if w_total > 1:
+		_subtitle.text = "%s — Wave %d/%d" % [enemy_name, (w_idx + 1), w_total]
+	else:
+		_subtitle.text = "%s" % enemy_name
 
+	if w_total > 1:
+		enemy_label_name = "%s (%d/%d)" % [enemy_name, (w_idx + 1), w_total]
+
+	_e_lbl.text = "%s HP: %d / %d" % [enemy_label_name, int(round(e_hp)), int(round(e_max))]
 	
 	# Player art
 	var p_path: String = _resolve_player_sprite_path()
@@ -512,7 +521,6 @@ func _on_dungeon_finished(dungeon_id: String, attempted_level: int, success: boo
 	# Return first (swap scenes), then show popup next frame so it can't be instantly "dim-click closed"
 	Game.return_from_dungeon_scene()
 	Game.call_deferred("show_dungeon_result_popup", dungeon_id, attempted_level, success, r)
-
 
 func _player_sprite_key_from_player() -> String:
 	# Default

@@ -81,6 +81,31 @@ func reward_for_level(dungeon_id: String, level: int) -> Dictionary:
 		return {}
 
 	level = maxi(1, level)
+
+	# Multi-reward path (preferred when configured)
+	if def.reward_curves != null and def.reward_curves.size() > 0:
+		var out: Dictionary = {}
+		for c in def.reward_curves:
+			if typeof(c) != TYPE_DICTIONARY:
+				continue
+			var rid := String(c.get("id", ""))
+			if rid == "":
+				continue
+
+			var base := int(c.get("base", 0))
+			var per_level := int(c.get("per_level", 0))
+			var amt := base + (level - 1) * per_level
+
+			var step_every := int(c.get("step_every", 0))
+			var step_amount := int(c.get("step_amount", 0))
+			if step_every > 0 and step_amount != 0:
+				amt += int(floor(float(level - 1) / float(step_every))) * step_amount
+
+			if amt > 0:
+				out[rid] = amt
+		return out
+
+	# Legacy single-reward fallback
 	var amt: int = def.reward_base + (level - 1) * def.reward_per_level
 	return { def.reward_currency: amt }
 
@@ -121,10 +146,50 @@ func complete_current_level_success(dungeon_id: String) -> Dictionary:
 	changed.emit()
 	return reward
 
+func _has_player_prop(prop: String) -> bool:
+	for p in _player.get_property_list():
+		if String(p.get("name", "")) == prop:
+			return true
+	return false
+
+func _add_to_player_prop(prop: String, amount: int) -> bool:
+	if amount == 0:
+		return true
+	if _player == null:
+		return false
+	if not _has_player_prop(prop):
+		return false
+	_player.set(prop, int(_player.get(prop)) + amount)
+	return true
+
 func _apply_reward(reward: Dictionary) -> void:
-	# MVP: only the currency we need right now.
-	if reward.has("crucible_keys"):
-		_player.crucible_keys += int(reward["crucible_keys"])
+	if _player == null or reward == null or reward.is_empty():
+		return
+
+	for k in reward.keys():
+		var id := String(k)
+		var amt := int(reward[k])
+		if amt <= 0:
+			continue
+
+		match id:
+			"crucible_keys":
+				_add_to_player_prop("crucible_keys", amt)
+
+			"crystals":
+				# adjust to your actual PlayerModel field name if different
+				if not _add_to_player_prop("crystals", amt):
+					_add_to_player_prop("crystal", amt)
+
+			"skill_tickets":
+				# adjust to your actual PlayerModel field name if different
+				if not _add_to_player_prop("skill_tickets", amt):
+					if not _add_to_player_prop("skill_draw_tickets", amt):
+						_add_to_player_prop("skill_coupons", amt)
+
+			_:
+				# ignore unknown reward ids for now (or add more mappings)
+				pass
 
 func begin_attempt(dungeon_id: String) -> bool:
 	# Only validates. Do NOT consume a key here.
@@ -170,9 +235,53 @@ func enemy_stats_for_level(dungeon_id: String, level: int) -> Dictionary:
 				"sprite_path": def.enemy_sprite_path,
 			}
 
+		DungeonDef.DungeonKind.WAVES:
+			return enemy_stats_for_wave(dungeon_id, level, 0)
+
 		_:
-			# Waves later
 			return {}
+
+func wave_count(dungeon_id: String) -> int:
+	var def := DungeonCatalog.get_def(dungeon_id)
+	if def == null:
+		return 1
+	return maxi(1, int(def.waves_count))
+
+func enemy_stats_for_wave(dungeon_id: String, level: int, wave_index: int) -> Dictionary:
+	var def := DungeonCatalog.get_def(dungeon_id)
+	if def == null:
+		return {}
+
+	level = maxi(1, level)
+	wave_index = maxi(0, wave_index)
+
+	# Base scaling (same math as boss)
+	var hp_mult: float = def.enemy_hp_mult_base + float(level - 1) * def.enemy_hp_mult_per_level
+	var atk_mult: float = def.enemy_atk_mult_base + float(level - 1) * def.enemy_atk_mult_per_level
+	var def_mult: float = def.enemy_def_mult_base + float(level - 1) * def.enemy_def_mult_per_level
+
+	# Final wave modifier
+	var last_idx := wave_count(dungeon_id) - 1
+	if wave_index >= last_idx:
+		hp_mult *= float(def.waves_final_hp_mult)
+		atk_mult *= float(def.waves_final_atk_mult)
+		def_mult *= float(def.waves_final_def_mult)
+
+	var hp: float = float(Catalog.ENEMY_BASE_HP) * hp_mult
+	var atk: float = float(Catalog.ENEMY_BASE_ATK) * atk_mult
+	var df: float = float(Catalog.ENEMY_BASE_DEF) * def_mult
+
+	return {
+		"name": def.enemy_name,
+		"hp": hp,
+		"atk": atk,
+		"def": df,
+		"aps": def.enemy_aps,
+		"is_boss": true,
+		"sprite_path": def.enemy_sprite_path,
+		"wave_index": wave_index,
+		"waves_total": wave_count(dungeon_id),
+	}
 
 func _consume_key(dungeon_id: String) -> bool:
 	var k: int = get_key_count(dungeon_id)
@@ -225,8 +334,11 @@ func _notify_changed() -> void:
 const SECONDS_PER_DAY_UTC: int = 86400
 const DAILY_DUNGEON_KEY_CAP: int = 5
 
-func daily_key_cap(_dungeon_id: String) -> int:
-	return DAILY_DUNGEON_KEY_CAP
+func daily_key_cap(dungeon_id: String) -> int:
+	var def := DungeonCatalog.get_def(dungeon_id)
+	if def == null:
+		return 5
+	return maxi(0, int(def.daily_key_cap))
 
 func seconds_until_daily_reset() -> int:
 	var now_unix: int = int(Time.get_unix_time_from_system())

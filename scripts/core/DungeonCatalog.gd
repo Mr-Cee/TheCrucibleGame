@@ -2,6 +2,8 @@ extends Node
 class_name DungeonCatalog
 
 const CRUCIBLE_KEY_DUNGEON_ID: String = "crucible_key_dungeon"
+const MOLTEN_DEPTHS_DUNGEON_ID: String = "molten_depths"
+
 
 static var _defs: Dictionary = {}
 
@@ -31,6 +33,49 @@ static func _ensure() -> void:
 	d.enemy_damage_mult = 0.0
 
 	_defs[d.id] = d
+	
+		# ----------------------------
+	# Molten Depths (new dungeon)
+	# ----------------------------
+	var m := DungeonDef.new()
+	m.id = MOLTEN_DEPTHS_DUNGEON_ID
+	m.display_name = "Molten Depths"
+	m.description = "Defeat five molten guardians under strict timers. Earn crystals and skill tickets."
+	m.key_display_name = "Molten Dungeon Key"
+	m.daily_key_cap = 5
+
+	# 5 boss-like enemies, 30 seconds each (your dungeon runner will reset timer per wave)
+	m.kind = DungeonDef.DungeonKind.WAVES
+	m.waves_count = 5
+	m.time_limit_seconds = 30.0
+
+	# Boss-like baseline scaling (tune as desired)
+	m.enemy_name = "Molten Guardian"
+	m.enemy_sprite_path = "res://assets/bosses/molten_guardian.png" # placeholder; set your actual path
+	m.enemy_hp_mult_base = 10.0
+	m.enemy_hp_mult_per_level = 0.75
+	m.enemy_atk_mult_base = 5.0
+	m.enemy_atk_mult_per_level = 0.30
+	m.enemy_def_mult_base = 2.0
+	m.enemy_def_mult_per_level = 0.10
+	m.enemy_aps = 0.75
+	m.enemy_damage_mult = 1.0 # enemies DO damage in this dungeon
+
+	# Final wave slightly tougher
+	m.waves_final_hp_mult = 1.20
+	m.waves_final_atk_mult = 1.10
+	m.waves_final_def_mult = 1.05
+
+	# Multi rewards:
+	# crystals: 100 + 5*(level-1)
+	# tickets: 10 + floor((level-1)/5)
+	m.reward_curves = [
+		{ "id": "crystals", "base": 100, "per_level": 5 },
+		{ "id": "skill_tickets", "base": 10, "step_every": 5, "step_amount": 1 },
+	]
+
+	_defs[m.id] = m
+
 
 static func get_def(dungeon_id: String) -> DungeonDef:
 	_ensure()

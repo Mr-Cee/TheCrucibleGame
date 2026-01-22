@@ -101,6 +101,10 @@ var _dungeon_active: bool = false
 var _dungeon_id: String = ""
 var _dungeon_level: int = 0
 var _dungeon_saved_ctx: Dictionary = {}
+var _dungeon_wave_idx: int = 0
+var _dungeon_waves_total: int = 1
+var _dungeon_kind: int = DungeonDef.DungeonKind.BOSS
+
 
 #===================================================================================================
 
@@ -937,15 +941,37 @@ func _apply_defense(raw: float, defense: float) -> float:
 func _battle_on_enemy_defeated() -> void:
 	if _dungeon_active:
 		var ds: DungeonSystem = (game.get("dungeon_system") as DungeonSystem)
-		var reward: Dictionary = {}
-		if ds != null:
-			reward = ds.reward_and_advance_on_success(_dungeon_id)
+		if ds == null:
+			_finish_dungeon(false, {})
+			return
 
-		if game != null and game.has_signal("inventory_event") and ds != null:
+		# If this dungeon is WAVES, move to the next wave until the final one is cleared.
+		if _dungeon_kind == DungeonDef.DungeonKind.WAVES and _dungeon_waves_total > 1 and _dungeon_wave_idx < (_dungeon_waves_total - 1):
+			_dungeon_wave_idx += 1
+			battle_runtime["dungeon_wave_idx"] = _dungeon_wave_idx
+
+			# Reset the per-enemy timer (30s each, etc.)
+			var limit: float = float(ds.time_limit_seconds(_dungeon_id))
+			battle_runtime["dungeon_time_total"] = limit
+			battle_runtime["dungeon_time_left"] = limit
+
+			# Small log line (optional but useful)
+			log_combat("system", "system", "[color=#CFCFCF]Next wave[/color] (%d/%d)" % [_dungeon_wave_idx + 1, _dungeon_waves_total])
+
+			# Spawn next boss-like enemy. Keep player HP as-is; just reset enemy.
+			_battle_spawn_dungeon_enemy(true)
+			battle_changed.emit()
+			return
+
+		# Final wave (or boss dungeon): now grant reward and finish.
+		var reward: Dictionary = ds.reward_and_advance_on_success(_dungeon_id)
+
+		if game != null and game.has_signal("inventory_event"):
 			game.emit_signal("inventory_event", "Dungeon cleared! Gained: %s" % ds.reward_to_text(reward))
 
 		_finish_dungeon(true, reward)
 		return
+
 	
 	if player == null:
 		return
@@ -1118,7 +1144,12 @@ func _battle_spawn_dungeon_enemy(reset_hp: bool) -> void:
 	if ds == null:
 		return
 
-	var stats: Dictionary = ds.enemy_stats_for_level(_dungeon_id, _dungeon_level)
+	var stats: Dictionary = {}
+	if _dungeon_kind == DungeonDef.DungeonKind.WAVES and ds.has_method("enemy_stats_for_wave"):
+		stats = ds.enemy_stats_for_wave(_dungeon_id, _dungeon_level, _dungeon_wave_idx)
+	else:
+		stats = ds.enemy_stats_for_level(_dungeon_id, _dungeon_level)
+
 
 	var hp: float = float(stats.get("hp", Catalog.ENEMY_BASE_HP))
 	var atk: float = float(stats.get("atk", Catalog.ENEMY_BASE_ATK))
@@ -1128,6 +1159,9 @@ func _battle_spawn_dungeon_enemy(reset_hp: bool) -> void:
 	battle_runtime["is_boss"] = true
 	battle_runtime["enemy_name"] = String(stats.get("name", "Boss"))
 	battle_runtime["enemy_sprite_path"] = String(stats.get("sprite_path", ""))
+	battle_runtime["dungeon_wave_idx"] = _dungeon_wave_idx
+	battle_runtime["dungeon_waves_total"] = _dungeon_waves_total
+
 
 
 	battle_runtime["enemy_hp_max"] = hp
@@ -1343,6 +1377,18 @@ func start_dungeon_run(dungeon_id: String) -> bool:
 	_dungeon_id = dungeon_id
 	_dungeon_level = ds.get_current_level(dungeon_id)
 	
+	var def: DungeonDef = ds.get_def(dungeon_id)
+	_dungeon_kind = int(def.kind) if def != null else DungeonDef.DungeonKind.BOSS
+	_dungeon_wave_idx = 0
+	_dungeon_waves_total = 1
+	if def != null and int(def.kind) == DungeonDef.DungeonKind.WAVES:
+		# Uses your DungeonSystem helper (added earlier). Fallback to 5 if not present.
+		_dungeon_waves_total = int(ds.wave_count(dungeon_id)) if ds.has_method("wave_count") else 5
+
+	battle_runtime["dungeon_wave_idx"] = _dungeon_wave_idx
+	battle_runtime["dungeon_waves_total"] = _dungeon_waves_total
+
+	
 	var limit: float = 0.0
 	if ds != null and ds.has_method("time_limit_seconds"):
 		limit = float(ds.time_limit_seconds(dungeon_id))
@@ -1451,6 +1497,10 @@ func _finish_dungeon(success: bool, reward: Dictionary) -> void:
 	_dungeon_active = false
 	_dungeon_id = ""
 	_dungeon_level = 0
+	_dungeon_wave_idx = 0
+	_dungeon_waves_total = 1
+	_dungeon_kind = DungeonDef.DungeonKind.BOSS
+
 
 	var ctx := _dungeon_saved_ctx
 	_dungeon_saved_ctx = {}
