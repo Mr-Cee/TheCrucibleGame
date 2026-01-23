@@ -31,6 +31,28 @@ signal leveled_up(levels_gained: int)
 }
 @export var deferred_gear: Array[Dictionary] = []
 
+# =======================
+# Combat Power (CP) tuning
+# =======================
+const CP_SCALE: float = 100.0
+# CP_SCALE=100 makes early CP ~10k instead of ~100 and prevents tiny upgrades showing 0.
+
+const CP_SKILL_BASE_BY_RARITY := {
+	Catalog.Rarity.COMMON: 4.0,
+	Catalog.Rarity.UNCOMMON: 6.0,
+	Catalog.Rarity.RARE: 10.0,
+	Catalog.Rarity.UNIQUE: 16.0,
+	Catalog.Rarity.MYTHIC: 25.0,
+	Catalog.Rarity.LEGENDARY: 40.0,
+	Catalog.Rarity.IMMORTAL: 60.0,
+	Catalog.Rarity.SUPREME: 85.0,
+	Catalog.Rarity.AUROUS: 120.0,
+	Catalog.Rarity.ETERNAL: 170.0,
+}
+
+const CP_SKILL_LEVEL_GROWTH: float = 1.22
+const CP_SKILL_ACTIVE_MULT: float = 1.20
+const CP_SKILL_PASSIVE_MULT: float = 1.00
 
 # =============== Skill Generator ====================
 @export var skill_tickets: int = 0
@@ -219,31 +241,147 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.ensure_name_initialized()
 	return p
 
+func _obj_has_prop(o: Object, prop: String) -> bool:
+	if o == null:
+		return false
+	for p in o.get_property_list():
+		if String(p.get("name", "")) == prop:
+			return true
+	return false
 
+func _obj_get(o: Object, prop: String, default_val):
+	return o.get(prop) if _obj_has_prop(o, prop) else default_val
+
+func _skill_rarity_id(sd: Object) -> int:
+	# Try a few common property names; fall back to Common.
+	var r = _obj_get(sd, "rarity", null)
+	if r != null:
+		if typeof(r) == TYPE_INT:
+			return int(r)
+		if typeof(r) == TYPE_STRING:
+			var rs := String(r).to_lower()
+			for k in Catalog.RARITY_NAMES.keys():
+				if String(Catalog.RARITY_NAMES[k]).to_lower() == rs:
+					return int(k)
+
+	r = _obj_get(sd, "rarity_id", null)
+	if r != null and typeof(r) == TYPE_INT:
+		return int(r)
+
+	# If a skill uses a numeric tier (1..N), map roughly upward.
+	var tier = _obj_get(sd, "tier", null)
+	if tier != null and typeof(tier) == TYPE_INT:
+		var t: int = int(tier)
+		# 1 common, 2 uncommon, 3 rare, 4 unique, ...
+		var map := [
+			Catalog.Rarity.COMMON,
+			Catalog.Rarity.UNCOMMON,
+			Catalog.Rarity.RARE,
+			Catalog.Rarity.UNIQUE,
+			Catalog.Rarity.MYTHIC,
+			Catalog.Rarity.LEGENDARY,
+			Catalog.Rarity.IMMORTAL,
+			Catalog.Rarity.SUPREME,
+			Catalog.Rarity.AUROUS,
+			Catalog.Rarity.ETERNAL,
+		]
+		return map[clampi(t - 1, 0, map.size() - 1)]
+
+	return int(Catalog.Rarity.COMMON)
+
+func _gather_unlocked_skill_ids_for_cp() -> Array[String]:
+	# "Unlocked" = level > 0 in skill_levels, plus class-granted passives.
+	var seen := {}
+	var out: Array[String] = []
+
+	# All leveled/unlocked skills
+	if skill_levels != null:
+		for k in skill_levels.keys():
+			var sid := String(k)
+			if sid == "" or seen.has(sid):
+				continue
+			if int(skill_levels.get(sid, 0)) <= 0:
+				continue
+			seen[sid] = true
+			out.append(sid)
+
+	# Class-granted passives (count as unlocked for CP, even if not in skill_levels)
+	var cd: ClassDef = ClassCatalog.get_def(class_def_id)
+	if cd != null and cd.granted_passive_skills != null:
+		for sid0 in cd.granted_passive_skills:
+			var sid := String(sid0)
+			if sid == "" or seen.has(sid):
+				continue
+			seen[sid] = true
+			out.append(sid)
+
+	return out
+
+func _combat_power_from_skills() -> float:
+	var total: float = 0.0
+	var ids := _gather_unlocked_skill_ids_for_cp()
+
+	for sid in ids:
+		var sd: SkillDef = SkillCatalog.get_def(sid)
+		if sd == null:
+			continue
+
+		var lvl: int = maxi(1, int(skill_levels.get(sid, 1)))
+		var rar: int = _skill_rarity_id(sd)
+
+		var base: float = float(CP_SKILL_BASE_BY_RARITY.get(rar, 4.0))
+		var level_mult: float = pow(CP_SKILL_LEVEL_GROWTH, float(lvl - 1))
+
+		# Active vs Passive weighting if the SkillDef exposes "type"
+		var t = _obj_get(sd, "type", null)
+		var kind_mult: float = 1.0
+		if t != null:
+			# SkillDef.SkillType.PASSIVE is typically 1; safe compare if enum exists
+			if int(t) == int(SkillDef.SkillType.PASSIVE):
+				kind_mult = CP_SKILL_PASSIVE_MULT
+			else:
+				kind_mult = CP_SKILL_ACTIVE_MULT
+		else:
+			# If we can't tell, treat as active-ish (more exciting)
+			kind_mult = CP_SKILL_ACTIVE_MULT
+
+		total += base * level_mult * kind_mult
+
+	return total
 
 func base_stats() -> Stats:
 	var s := Stats.new()
-	# Simple class baselines; tune later. :contentReference[oaicite:3]{index=3}
-	match class_id:
+
+	# Simple class baselines; tune later.
+	match int(class_id):
 		ClassId.WARRIOR:
 			s.hp = 120
 			s.def = 12
 			s.atk = 8
-			s.str = 5
+			# Optional flavor:
+			# s.block = 1
+
 		ClassId.MAGE:
 			s.hp = 80
 			s.def = 6
 			s.atk = 12
-			s.int_ = 5
+			# Optional flavor:
+			# s.skill_crit_chance = 2
+			# s.crit_chance = 1
+
 		ClassId.ARCHER:
 			s.hp = 100
 			s.def = 9
 			s.atk = 10
-			s.agi = 5
+			# Optional flavor:
+			s.atk_spd = 0.05
+			# s.avoidance = 1
+
 	# Growth per level (MVP)
 	s.hp += (level - 1) * 8
 	s.def += (level - 1) * 0.8
 	s.atk += (level - 1) * 1.0
+
 	return s
 
 func total_stats() -> Stats:
@@ -261,30 +399,46 @@ func total_stats() -> Stats:
 		if item != null:
 			s.add(item.stats)
 			
-	#global stat synergies per document
-	#Conversion RatesL
-	s.hp += s.str * 5.0
-	s.atk += s.str * 0.5
-	s.atk += s.int_ * 0.6
-	s.atk += s.agi * 0.55
-	s.atk_spd += s.agi * 0.05
 	
 	return s
 
 func combat_power() -> int:
-	# CP formula (MVP): weighted sum. Tune as we balance.
 	var s := total_stats()
+
+	# Use FINAL values so % bonuses actually matter in CP.
+	var hp_v: float = s.final_hp_value()
+	var atk_v: float = s.final_atk_value()
+	var def_v: float = s.final_def_value()
+	var spd_v: float = s.final_atk_spd_value()
+
 	var cp := 0.0
-	cp += s.hp * 0.20
-	cp += s.def * 2.0
-	cp += s.atk * 6.0
-	cp += s.str * 4.0
-	cp += s.int_ * 4.0
-	cp += s.agi * 4.0
-	cp += s.atk_spd * 20.0
+
+	# Core stats
+	cp += hp_v * 0.20
+	cp += def_v * 2.0
+	cp += atk_v * 6.0
+	cp += spd_v * 20.0
+
+	# Advanced stats
 	cp += (s.block + s.avoidance) * 10.0
 	cp += (s.crit_chance + s.combo_chance) * 8.0
-	return int(round(cp))
+
+	cp += (s.crit_res + s.ignore_evasion) * 6.0
+	cp += (s.basic_atk_mult + s.final_dmg_boost_pct) * 3.0
+	cp += (s.basic_atk_dmg_res + s.final_dmg_res_pct) * 3.0
+	cp += (s.skill_crit_chance + s.skill_crit_dmg) * 2.0
+	cp += (s.skill_dmg_res + s.boss_dmg_res) * 2.0
+	cp += (s.boss_dmg) * 2.0
+	cp += (s.regen) * 10.0
+
+	# Skills contribute to CP (unlocked + class-granted passives)
+	cp += _combat_power_from_skills()
+
+	# Scale up to “big numbers” and reduce 0-gain incidents.
+	var scaled: float = cp * CP_SCALE
+
+	# Ceil helps small positive gains show up more often than round.
+	return maxi(0, int(ceil(scaled)))
 
 func xp_required_for_next_level() -> int:
 	# Simple exponential curve (tune later).

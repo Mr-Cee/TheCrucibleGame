@@ -52,13 +52,18 @@ static func _ensure_built() -> void:
 	_defs["mage"] = _mk("mage", "Mage", 1, 1, 1)
 
 	var sorc := Stats.new()
-	sorc.int_ = 6
+	# Replacing INT scaling with offensive stats.
+	sorc.atk = 6
 	sorc.crit_chance = 4
+	# Optional: make mage feel “spell-y” rather than basic-hit-y.
+	sorc.skill_crit_chance = 2
 	_defs["sorcerer"] = _mk("sorcerer", "Sorcerer", 1, 2, 25, "mage", sorc, ["mag_focus"])
 
 	var lock := Stats.new()
-	lock.int_ = 5
+	# Replacing INT scaling with sustain / caster flavor.
+	lock.atk = 4
 	lock.regen = 0.5
+	lock.skill_dmg_res = 2
 	_defs["warlock"] = _mk("warlock", "Warlock", 1, 2, 25, "mage", lock)
 
 	_defs["archmage"] = _mk("archmage", "Archmage", 1, 3, 50, "sorcerer")
@@ -79,13 +84,17 @@ static func _ensure_built() -> void:
 	_defs["archer"] = _mk("archer", "Archer", 2, 1, 1)
 
 	var ranger := Stats.new()
-	ranger.agi = 6
+	# Replacing AGI scaling with speed + damage.
+	ranger.atk = 4
 	ranger.atk_spd = 0.05
+	ranger.ignore_evasion = 2
 	_defs["ranger"] = _mk("ranger", "Ranger", 2, 2, 25, "archer", ranger, ["arc_swiftness"])
 
 	var rogue := Stats.new()
-	rogue.agi = 5
+	# Replacing AGI scaling with evasive/crit flavor.
 	rogue.avoidance = 3
+	rogue.crit_chance = 2
+	rogue.atk = 3
 	_defs["rogue"] = _mk("rogue", "Rogue", 2, 2, 25, "archer", rogue)
 
 	_defs["sharpshooter"] = _mk("sharpshooter", "Sharpshooter", 2, 3, 50, "ranger")

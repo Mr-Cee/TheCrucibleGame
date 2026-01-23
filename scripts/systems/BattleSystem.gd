@@ -38,10 +38,45 @@ var _p_hp_max: float = 1.0
 var _p_atk: float = 1.0
 var _p_def: float = 0.0
 var _p_aps: float = 1.0
-var _p_crit: float = 0.0        # 0..1
-var _p_combo: float = 0.0       # percent points (can exceed 100)
+
+# Percent-point cached stats (most are 0..100; some can exceed 100 where appropriate)
+var _p_crit_pp: float = 0.0
+var _p_crit_dmg_pp: float = 0.0
+var _p_combo_pp: float = 0.0
+var _p_combo_dmg_pp: float = 0.0
+var _p_combo_dmg_res_pp: float = 0.0
+
+var _p_counter_pp: float = 0.0
+var _p_counter_dmg_pp: float = 0.0
+
+var _p_stun_pp: float = 0.0
+
 var _p_block: float = 0.0       # percent points
-var _p_avoid: float = 0.0       # percent points
+var _p_avoid: float = 0.0       # percent points (your "Evasion")
+
+var _p_regen_hps: float = 0.0
+
+var _p_basic_atk_mult_pp: float = 0.0
+var _p_basic_atk_dmg_res_pp: float = 0.0
+
+var _p_boss_dmg_pp: float = 0.0
+var _p_boss_dmg_res_pp: float = 0.0
+
+var _p_final_dmg_boost_pp: float = 0.0
+var _p_final_dmg_res_pp: float = 0.0
+
+# Skill crit stats (skills only)
+var _p_skill_crit_pp: float = 0.0
+var _p_skill_crit_dmg_pp: float = 0.0
+
+# Tuning constants
+const BASIC_CRIT_MULT_BASE: float = 1.5
+const BASIC_COMBO_EXTRA_HIT_MULT_BASE: float = 0.5
+const BASIC_STUN_DURATION: float = 1.0
+
+const RESIST_CAP_PP: float = 90.0
+const CHANCE_CAP_PP: float = 90.0
+
 
 # Enemy combat
 var _e_atk: float = 1.0
@@ -368,13 +403,29 @@ func _apply_active_skill(def: SkillDef, slot: int) -> void:
 			_skill_deal_damage(def, raw)
 
 		SkillDef.EffectType.MULTI_HIT:
+			var is_boss: bool = bool(battle_runtime.get("is_boss", false))
 			var per := _p_atk * def.power * mult
 			var total := 0.0
+			var crits: int = 0
+
 			for _i in range(maxi(1, def.hits)):
-				total += _apply_defense(per, _enemy_def_effective())
-			total *= _enemy_vuln_mult()
+				var hit := _apply_defense(per, _enemy_def_effective())
+				hit *= _enemy_vuln_mult()
+
+				if _p_skill_crit_pp > 0.0 and _roll_skill_crit():
+					crits += 1
+					hit *= _skill_crit_mult()
+
+				hit = _apply_outgoing_mods(hit, is_boss)
+				total += hit
+
 			var applied := _apply_damage_to_target(total)
-			log_combat("skill", "normal", "[color=#B58CFF]%s[/color] hits %dx for [b]%d[/b]" % [def.display_name, maxi(1, def.hits), int(round(applied))])
+
+			if crits > 0:
+				log_combat("skill", "crit", "[color=#B58CFF]%s[/color] hits %dx for [b]%d[/b] [color=#FFD24A](CRIT x%d)[/color]" % [def.display_name, maxi(1, def.hits), int(round(applied)), crits])
+			else:
+				log_combat("skill", "normal", "[color=#B58CFF]%s[/color] hits %dx for [b]%d[/b]" % [def.display_name, maxi(1, def.hits), int(round(applied))])
+
 
 		SkillDef.EffectType.DOT:
 			# Immediate hit + DoT
@@ -477,11 +528,26 @@ func _apply_active_skill(def: SkillDef, slot: int) -> void:
 			log_combat("skill", "heal", "[color=#B58CFF]%s[/color] drains [b]%d[/b] and heals [b]%d[/b]" % [def.display_name, int(round(applied)), int(round(heal3))])
 
 func _skill_deal_damage(def: SkillDef, raw: float) -> void:
+	var is_boss: bool = bool(battle_runtime.get("is_boss", false))
+
 	var dealt := _apply_defense(raw, _enemy_def_effective())
-	# Vulnerability multiplier (target-scoped)
 	dealt *= _enemy_vuln_mult()
+
+	# Skill crit
+	var was_crit: bool = false
+	if _p_skill_crit_pp > 0.0:
+		if _roll_skill_crit():
+			was_crit = true
+			dealt *= _skill_crit_mult()
+
+	dealt = _apply_outgoing_mods(dealt, is_boss)
+
 	var applied := _apply_damage_to_target(dealt)
-	log_combat("skill", "normal", "[color=#B58CFF]%s[/color] deals [b]%d[/b]" % [def.display_name, int(round(applied))])
+
+	if was_crit:
+		log_combat("skill", "crit", "[color=#B58CFF]%s[/color] crits for [b]%d[/b]" % [def.display_name, int(round(applied))])
+	else:
+		log_combat("skill", "normal", "[color=#B58CFF]%s[/color] deals [b]%d[/b]" % [def.display_name, int(round(applied))])
 
 func _skill_heal(def: SkillDef, amount: float, quiet: bool = false) -> void:
 	var hp := float(battle_runtime.get("player_hp", 0.0))
@@ -727,11 +793,14 @@ func _battle_tick_effects(dt: float) -> void:
 	if float(battle_runtime.get("enemy_stun_time", 0.0)) > 0.0:
 		battle_runtime["enemy_stun_time"] = max(0.0, float(battle_runtime["enemy_stun_time"]) - dt)
 
+	var is_boss: bool = bool(battle_runtime.get("is_boss", false))
+
 	# Enemy DoT (target-scoped)
 	if float(battle_runtime.get("enemy_dot_time", 0.0)) > 0.0:
 		var dps := float(battle_runtime.get("enemy_dot_dps", 0.0))
 		if dps > 0.0:
 			var dealt := dps * dt * _enemy_vuln_mult()
+			dealt = _apply_outgoing_mods(dealt, is_boss) # treat DoT as skill/outgoing damage
 			_apply_damage_to_target(dealt)
 		battle_runtime["enemy_dot_time"] = max(0.0, float(battle_runtime["enemy_dot_time"]) - dt)
 		if float(battle_runtime["enemy_dot_time"]) <= 0.0:
@@ -745,6 +814,13 @@ func _battle_tick_effects(dt: float) -> void:
 		battle_runtime["player_hot_time"] = max(0.0, float(battle_runtime["player_hot_time"]) - dt)
 		if float(battle_runtime["player_hot_time"]) <= 0.0:
 			battle_runtime["player_hot_hps"] = 0.0
+
+	# Player Regeneration (flat HP per second)
+	if _p_regen_hps > 0.0:
+		var hp := float(battle_runtime.get("player_hp", 0.0))
+		var hm := float(battle_runtime.get("player_hp_max", 1.0))
+		if hp > 0.0 and hp < hm:
+			battle_runtime["player_hp"] = minf(hm, hp + (_p_regen_hps * dt))
 
 func _tick_timer_reset_mult(time_key: String, mult_key: String, reset_value: float, dt: float) -> void:
 	var t := float(battle_runtime.get(time_key, 0.0))
@@ -825,20 +901,52 @@ func _battle_process(delta: float) -> void:
 		_enemies[i] = e
 
 func _battle_player_attack() -> void:
+	var is_boss: bool = bool(battle_runtime.get("is_boss", false))
+
+	# --- PATCH: lock target + read target advanced stats safely ---
+	_ensure_valid_target()
+	var tidx: int = _target_enemy_idx
+	if tidx < 0 or tidx >= _enemies.size():
+		return
+	var te: Dictionary = _enemies[tidx]
+
+	# Enemy evasion vs player ignore evasion (player ignore is wired later; default 0 for now)
+	var enemy_evasion_pp: float = float(te.get("evasion_pp", 0.0))
+	var player_ignore_evasion_pp: float = float(battle_runtime.get("player_ignore_evasion_pp", 0.0)) # wire from stats later
+	var eff_enemy_evasion_pp: float = clampf(maxf(0.0, enemy_evasion_pp - player_ignore_evasion_pp), 0.0, 60.0)
+
+	if (RNG as RNGService).randf() < _pp_to_frac(eff_enemy_evasion_pp, 100.0):
+		if not combat_log_compact_effective():
+			log_combat("player", "avoid", "[color=#7CFF7C]You[/color] attack — [color=#7FB0FF](EVADED)[/color]")
+		return
+	# --- END PATCH ---
+
 	var was_crit: bool = false
 	var hits: int = 1
 
 	var dmg: float = _p_atk * _player_atk_mult()
 
-	# Crit
-	var crit_chance: float = clamp(_p_crit + (float(battle_runtime.get("player_crit_pp_add", 0.0)) / 100.0), 0.0, 0.90)
+	# Basic ATK multiplier (percent bonus)
+	if _p_basic_atk_mult_pp != 0.0:
+		dmg *= 1.0 + (_p_basic_atk_mult_pp / 100.0)
+
+	# --- PATCH: Crit vs enemy Crit RES ---
+	var crit_pp_add: float = float(battle_runtime.get("player_crit_pp_add", 0.0))
+	var enemy_crit_res_pp: float = float(te.get("crit_res_pp", 0.0))
+	var eff_crit_pp: float = (_p_crit_pp + crit_pp_add) - enemy_crit_res_pp
+	var crit_chance: float = _pp_to_frac(eff_crit_pp, CHANCE_CAP_PP)
+	# --- END PATCH ---
 
 	if (RNG as RNGService).randf() < crit_chance:
 		was_crit = true
-		dmg *= 1.5
+		dmg *= _basic_crit_mult()
 
-	# Combo (percent points; allow >100)
-	var cc: float = max(0.0, _p_combo) / 100.0
+	# --- PATCH: Combo vs enemy Ignore Combo ---
+	var enemy_ignore_combo_pp: float = float(te.get("ignore_combo_pp", 0.0))
+	var eff_combo_pp: float = maxf(0.0, _p_combo_pp - enemy_ignore_combo_pp)
+	var cc: float = eff_combo_pp / 100.0
+	# --- END PATCH ---
+
 	var guaranteed: int = int(floor(cc))
 	var extra_chance: float = cc - float(guaranteed)
 
@@ -846,13 +954,38 @@ func _battle_player_attack() -> void:
 	if (RNG as RNGService).randf() < extra_chance:
 		hits += 1
 
+	var extra_hit_mult: float = BASIC_COMBO_EXTRA_HIT_MULT_BASE * (1.0 + (_p_combo_dmg_pp / 100.0))
+
 	var total: float = dmg
 	if hits > 1:
-		total += float(hits - 1) * (dmg * 0.5) # extra hits at 50%
+		total += float(hits - 1) * (dmg * extra_hit_mult)
 
 	var dealt: float = _apply_defense(total, _enemy_def_effective())
 	dealt *= _enemy_vuln_mult()
-	var applied: float = _apply_damage_to_target(dealt)
+	dealt = _apply_outgoing_mods(dealt, is_boss)
+
+	# --- PATCH: apply enemy damage resists (basic/combo + final) before dealing ---
+	if hits > 1:
+		var enemy_combo_res_pp: float = float(te.get("combo_dmg_res_pp", 0.0))
+		dealt *= 1.0 - (_pp_to_frac(enemy_combo_res_pp, 90.0)) # cap handled by _pp_to_frac
+	else:
+		var enemy_basic_res_pp: float = float(te.get("basic_atk_dmg_res_pp", 0.0))
+		dealt *= 1.0 - (_pp_to_frac(enemy_basic_res_pp, 90.0))
+
+	var enemy_final_res_pp: float = float(te.get("final_dmg_res_pp", 0.0))
+	dealt *= 1.0 - (_pp_to_frac(enemy_final_res_pp, 90.0))
+
+	dealt = max(0.0, dealt)
+	var applied: float = _apply_damage_to_enemy(tidx, dealt)
+	# --- END PATCH ---
+
+	# Stun chance on basic attacks (simple baseline)
+	if applied > 0.0 and _p_stun_pp > 0.0:
+		var stun_chance := _pp_to_frac(_p_stun_pp, 100.0)
+		if (RNG as RNGService).randf() < stun_chance:
+			battle_runtime["enemy_stun_time"] = max(float(battle_runtime.get("enemy_stun_time", 0.0)), BASIC_STUN_DURATION)
+			if not combat_log_compact_effective():
+				log_combat("player", "cc", "[color=#7CFF7C]You[/color] inflict [color=#7FB0FF](STUN)[/color]")
 
 	# --- Combat log line ---
 	if combat_log_compact_effective():
@@ -889,28 +1022,92 @@ func _battle_enemy_attack_from(attacker_idx: int) -> void:
 	# Target-scoped weaken only affects the weakened enemy's attacks.
 	if is_target:
 		dmg *= _enemy_atk_mult()
-		
+
 	# Dungeon rule: optionally disable enemy damage (DPS race dungeons)
 	if _dungeon_active:
 		var mult: float = float(battle_runtime.get("dungeon_enemy_damage_mult", 1.0))
 		if mult <= 0.0:
 			return
 		dmg *= mult
-		
-	# Avoid
-	if (RNG as RNGService).randf() < (clamp(_p_avoid + float(battle_runtime.get("player_avoid_pp_add", 0.0)), 0.0, 100.0) / 100.0):
+
+	# --- PATCH: enemy outgoing multipliers (basic + final boost) ---
+	var enemy_basic_atk_mult_pp: float = float(e.get("basic_atk_mult_pp", 0.0))
+	if enemy_basic_atk_mult_pp != 0.0:
+		dmg *= 1.0 + (enemy_basic_atk_mult_pp / 100.0)
+
+	var enemy_final_boost_pp: float = float(e.get("final_dmg_boost_pp", 0.0))
+	if enemy_final_boost_pp != 0.0:
+		dmg *= 1.0 + (enemy_final_boost_pp / 100.0)
+	# --- END PATCH ---
+
+	# --- PATCH: Avoid (Evasion) with enemy Ignore Evasion ---
+	var enemy_ignore_evasion_pp: float = float(e.get("ignore_evasion_pp", 0.0))
+	var p_evasion_pp: float = _p_avoid + float(battle_runtime.get("player_avoid_pp_add", 0.0))
+	var eff_p_evasion_pp: float = clampf(maxf(0.0, p_evasion_pp - enemy_ignore_evasion_pp), 0.0, 60.0)
+
+	if (RNG as RNGService).randf() < _pp_to_frac(eff_p_evasion_pp, 100.0):
 		if combat_log_compact_effective():
 			_agg_enemy_hits["avoids"] = int(_agg_enemy_hits["avoids"]) + 1
 		else:
 			log_combat("enemy", "avoid", "[color=#FF8A8A]Enemy[/color] attacks — [color=#7FB0FF](AVOID)[/color]")
 		return
+	# --- END PATCH ---
 
 	var blocked: bool = false
-	if (RNG as RNGService).randf() < (clamp(_p_block, 0.0, 100.0) / 100.0):
+	if (RNG as RNGService).randf() < _pp_to_frac(_p_block, 100.0):
 		blocked = true
 		dmg *= 0.30
 
+	var is_boss: bool = bool(battle_runtime.get("is_boss", false))
+
+	# --- PATCH: enemy crit/combo before defense ---
+	var was_crit: bool = false
+	var hits: int = 1
+
+	# Enemy crit vs player Crit RES (player crit res wired later; default 0)
+	var p_crit_res_pp: float = float(battle_runtime.get("player_crit_res_pp", 0.0)) # wire from stats later
+	var enemy_crit_pp: float = float(e.get("crit_pp", 0.0))
+	var enemy_crit_dmg_pp: float = float(e.get("crit_dmg_pp", 0.0))
+
+	var eff_enemy_crit_pp: float = enemy_crit_pp - p_crit_res_pp
+	var enemy_crit_chance: float = _pp_to_frac(eff_enemy_crit_pp, CHANCE_CAP_PP)
+
+	if (RNG as RNGService).randf() < enemy_crit_chance:
+		was_crit = true
+		# base crit mult 1.5 plus crit dmg bonus percent
+		var crit_mult: float = 1.5 * (1.0 + (enemy_crit_dmg_pp / 100.0))
+		dmg *= crit_mult
+
+	# Enemy combo vs player Ignore Combo (wired later; default 0)
+	var p_ignore_combo_pp: float = float(battle_runtime.get("player_ignore_combo_pp", 0.0)) # wire from stats later
+	var enemy_combo_pp: float = float(e.get("combo_pp", 0.0))
+	var eff_enemy_combo_pp: float = maxf(0.0, enemy_combo_pp - p_ignore_combo_pp)
+
+	var cc: float = eff_enemy_combo_pp / 100.0
+	var guaranteed: int = int(floor(cc))
+	var extra_chance: float = cc - float(guaranteed)
+
+	hits = 1 + guaranteed
+	if (RNG as RNGService).randf() < extra_chance:
+		hits += 1
+
+	var enemy_combo_mult_pp: float = float(e.get("combo_mult_pp", 0.0))
+	var extra_hit_mult: float = BASIC_COMBO_EXTRA_HIT_MULT_BASE * (1.0 + (enemy_combo_mult_pp / 100.0))
+
+	if hits > 1:
+		dmg += float(hits - 1) * (dmg * extra_hit_mult)
+	# --- END PATCH ---
+
+	# Defense first
 	var dealt: float = _apply_defense(dmg, _p_def * _player_def_mult())
+
+	# Apply incoming reductions for BASIC attacks (or COMBO if multi-hit)
+	if hits > 1:
+		dealt = _apply_incoming_mods(dealt, is_boss, _p_combo_dmg_res_pp)
+	else:
+		dealt = _apply_incoming_mods(dealt, is_boss, _p_basic_atk_dmg_res_pp)
+
+	# Shield absorbs post-reduction damage
 	var shield: float = float(battle_runtime.get("player_shield", 0.0))
 	var remaining: float = dealt
 	if shield > 0.0 and remaining > 0.0:
@@ -921,6 +1118,22 @@ func _battle_enemy_attack_from(attacker_idx: int) -> void:
 
 	battle_runtime["player_hp"] = max(0.0, float(battle_runtime["player_hp"]) - remaining)
 
+	# --- PATCH: enemy stun chance vs player Ignore Stun ---
+	if remaining > 0.0 and float(battle_runtime.get("player_hp", 0.0)) > 0.0:
+		var p_ignore_stun_pp: float = float(battle_runtime.get("player_ignore_stun_pp", 0.0)) # wire from stats later
+		var enemy_stun_pp: float = float(e.get("stun_pp", 0.0))
+		var eff_stun_pp: float = maxf(0.0, enemy_stun_pp - p_ignore_stun_pp)
+		if (RNG as RNGService).randf() < _pp_to_frac(eff_stun_pp, 60.0):
+			battle_runtime["player_stun_time"] = max(float(battle_runtime.get("player_stun_time", 0.0)), BASIC_STUN_DURATION)
+			if not combat_log_compact_effective():
+				log_combat("enemy", "cc", "[color=#FF8A8A]Enemy[/color] inflicts [color=#7FB0FF](STUN)[/color]")
+	# --- END PATCH ---
+
+	# Counterstrike (simple: chance to retaliate the attacker after being hit)
+	if remaining > 0.0 and _p_counter_pp > 0.0 and float(battle_runtime.get("player_hp", 0.0)) > 0.0:
+		if (RNG as RNGService).randf() < _pp_to_frac(_p_counter_pp, 100.0):
+			_player_counter_attack(attacker_idx)
+
 	if combat_log_compact_effective():
 		_agg_enemy_hits["count"] = int(_agg_enemy_hits["count"]) + 1
 		_agg_enemy_hits["dmg"] = int(_agg_enemy_hits["dmg"]) + int(round(dealt))
@@ -928,15 +1141,135 @@ func _battle_enemy_attack_from(attacker_idx: int) -> void:
 	else:
 		var tag_txt: String = ""
 		var sev: String = "normal"
-		if blocked:
-			tag_txt = " [color=#7FB0FF](BLOCK)[/color]"
-			sev = "block"
+		var tags: Array[String] = []
+		if blocked: tags.append("BLOCK")
+		if was_crit: tags.append("CRIT")
+		if hits > 1: tags.append("COMBO x%d" % hits)
+		if tags.size() > 0:
+			tag_txt = " [color=#7FB0FF](%s)[/color]" % ", ".join(tags)
+			sev = ("crit" if was_crit else ("combo" if hits > 1 else ("block" if blocked else "normal")))
+
 		log_combat("enemy", sev, "[color=#FF8A8A]Enemy[/color] hit you for [b]%d[/b]%s" % [int(round(remaining)), tag_txt])
+
+func _player_counter_attack(attacker_idx: int) -> void:
+	if attacker_idx < 0 or attacker_idx >= _enemies.size():
+		return
+	if float(_enemies[attacker_idx].get("hp", 0.0)) <= 0.0:
+		return
+
+	var is_boss: bool = bool(battle_runtime.get("is_boss", false))
+
+	# Counter damage: based on ATK with a % bonus from counter_dmg_pp
+	var raw: float = _p_atk * _player_atk_mult()
+	raw *= 1.0 + (_p_counter_dmg_pp / 100.0)
+
+	var def_eff: float = _enemy_def_effective_for_idx(attacker_idx)
+	var dealt: float = _apply_defense(raw, def_eff)
+	dealt *= _enemy_vuln_mult_for_idx(attacker_idx)
+	dealt = _apply_outgoing_mods(dealt, is_boss)
+
+	var applied: float = _apply_damage_to_enemy(attacker_idx, dealt)
+	if applied <= 0.0:
+		return
+
+	if combat_log_compact_effective():
+		_agg_player_hits["count"] = int(_agg_player_hits["count"]) + 1
+		_agg_player_hits["dmg"] = int(_agg_player_hits["dmg"]) + int(round(applied))
+	else:
+		log_combat("player", "normal", "[color=#7CFF7C]You[/color] counter for [color=#FFD24A][b]%d[/b][/color]" % int(round(applied)))
 
 func _apply_defense(raw: float, defense: float) -> float:
 	# Diminishing returns: dmg * (100 / (100 + def))
 	var d: float = max(0.0, defense)
 	return max(1.0, raw * (100.0 / (100.0 + d)))
+
+func _pp_to_frac(pp: float, cap_pp: float = 100.0) -> float:
+	return clampf(pp, 0.0, cap_pp) / 100.0
+
+func _apply_resist_pp(amount: float, res_pp: float) -> float:
+	# res_pp is percent-points (0..100). Cap to avoid 100% immunity.
+	var r := _pp_to_frac(res_pp, RESIST_CAP_PP)
+	return max(0.0, amount * (1.0 - r))
+
+func _apply_outgoing_mods(amount: float, is_boss: bool) -> float:
+	var out := amount
+	if is_boss and _p_boss_dmg_pp != 0.0:
+		out *= 1.0 + (_p_boss_dmg_pp / 100.0)
+	if _p_final_dmg_boost_pp != 0.0:
+		out *= 1.0 + (_p_final_dmg_boost_pp / 100.0)
+	return out
+
+func _apply_incoming_mods(amount: float, is_boss: bool, category_res_pp: float) -> float:
+	var out := amount
+	out = _apply_resist_pp(out, category_res_pp)
+	if is_boss and _p_boss_dmg_res_pp != 0.0:
+		out = _apply_resist_pp(out, _p_boss_dmg_res_pp)
+	if _p_final_dmg_res_pp != 0.0:
+		out = _apply_resist_pp(out, _p_final_dmg_res_pp)
+	return out
+
+func _basic_crit_mult() -> float:
+	return BASIC_CRIT_MULT_BASE + (_p_crit_dmg_pp / 100.0)
+
+func _skill_crit_mult() -> float:
+	return BASIC_CRIT_MULT_BASE + (_p_skill_crit_dmg_pp / 100.0)
+
+func _roll_skill_crit() -> bool:
+	var chance := _pp_to_frac(_p_skill_crit_pp, CHANCE_CAP_PP)
+	return (RNG as RNGService).randf() < chance
+
+func _enemy_pp(idx: int, key: String) -> float:
+	if idx < 0 or idx >= _enemies.size():
+		return 0.0
+	return float(_enemies[idx].get(key, 0.0))
+
+func _roll_evade(attacker_ignore_evasion_pp: float, defender_evasion_pp: float) -> bool:
+	# Returns true if the attack is evaded.
+	var eff: float = maxf(0.0, defender_evasion_pp - attacker_ignore_evasion_pp)
+	# Keep evasion sane; you can raise later if desired.
+	eff = clampf(eff, 0.0, 60.0)
+	return (RNG as RNGService).randf() < (eff / 100.0)
+
+func _crit_chance_vs_res(attacker_crit_pp: float, defender_crit_res_pp: float) -> float:
+	var eff: float = maxf(0.0, attacker_crit_pp - defender_crit_res_pp)
+	eff = clampf(eff, 0.0, CHANCE_CAP_PP)
+	return eff / 100.0
+
+func _combo_pp_vs_ignore(attacker_combo_pp: float, defender_ignore_combo_pp: float) -> float:
+	return maxf(0.0, attacker_combo_pp - defender_ignore_combo_pp)
+
+func _apply_enemy_resists(amount: float, idx: int, category: String) -> float:
+	# category: "basic" | "skill" | "counter" | "combo"
+	var out := amount
+
+	match category:
+		"basic":
+			out = _apply_resist_pp(out, _enemy_pp(idx, "basic_atk_dmg_res_pp"))
+		"skill":
+			out = _apply_resist_pp(out, _enemy_pp(idx, "skill_dmg_res_pp"))
+		"counter":
+			out = _apply_resist_pp(out, _enemy_pp(idx, "counter_dmg_res_pp"))
+		"combo":
+			out = _apply_resist_pp(out, _enemy_pp(idx, "combo_dmg_res_pp"))
+
+	# Always apply final resist
+	out = _apply_resist_pp(out, _enemy_pp(idx, "final_dmg_res_pp"))
+	return out
+
+func _enemy_outgoing_mult(idx: int) -> float:
+	# Boss enemy outgoing multipliers (optional knobs)
+	var out := 1.0
+	out *= 1.0 + (_enemy_pp(idx, "basic_atk_mult_pp") / 100.0)
+	out *= 1.0 + (_enemy_pp(idx, "final_dmg_boost_pp") / 100.0)
+	return out
+
+func _enemy_def_effective_for_idx(idx: int) -> float:
+	# Armor-break is target-scoped in your runtime.
+	return _enemy_def_effective() if idx == _target_enemy_idx else _e_def
+
+func _enemy_vuln_mult_for_idx(idx: int) -> float:
+	# Vulnerability is target-scoped in your runtime.
+	return _enemy_vuln_mult() if idx == _target_enemy_idx else 1.0
 
 func _battle_on_enemy_defeated() -> void:
 	if _dungeon_active:
@@ -1088,6 +1421,9 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 
 	var is_boss: bool = (wav == Catalog.BATTLE_WAVES_PER_STAGE)
 	battle_runtime["is_boss"] = is_boss
+	
+	var adv: Dictionary = Catalog.battle_enemy_advanced_stats(diff, lvl, stg, wav, is_boss)
+
 
 	var m: Dictionary = Catalog.battle_enemy_multipliers(diff, lvl, stg, wav, is_boss)
 
@@ -1121,18 +1457,20 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 	for i in range(count):
 		var hpv: float = max(1.0, float(hp_parts[i]))
 		var atkv: float = max(1.0, float(atk_parts[i]))
-		var t0: float
-		if is_boss:
-			t0 = _roll_enemy_attack_interval(true, true)
-		else:
-			# spread initial attacks so they don't all fire at once
-			t0 = _randf_range(0.15, mean_interval)
-		_enemies.append({
+		var t0: float = ( _roll_enemy_attack_interval(true, true) if is_boss else _randf_range(0.15, mean_interval) )
+
+		var unit: Dictionary = {
 			"hp_max": hpv,
 			"hp": (hpv if reset_hp else hpv),
 			"atk": atkv,
 			"atk_timer": t0,
-		})
+		}
+
+		# Inject advanced stats (boss-only starting at Void I)
+		for k in adv.keys():
+			unit[k] = adv[k]
+
+		_enemies.append(unit)
 
 	_target_enemy_idx = 0
 	_ensure_valid_target()
@@ -1196,39 +1534,125 @@ func _battle_recompute_player_combat() -> void:
 	var hp_add: float = 0.0
 	var atk_add: float = 0.0
 	var def_add: float = 0.0
-	var atk_spd: float = 0.0
+	var atk_spd_add: float = 0.0  # legacy interpretation: additive percent (0.05 = +5%)
 
+	# Percent-point totals
 	var crit_pp: float = 0.0
+	var crit_dmg_pp: float = 0.0
 	var combo_pp: float = 0.0
+	var combo_dmg_pp: float = 0.0
+
+	var counter_pp: float = 0.0
+	var counter_dmg_pp: float = 0.0
+
+	var stun_pp: float = 0.0
+
 	var block_pp: float = 0.0
 	var avoid_pp: float = 0.0
+	var regen_hps: float = 0.0
+
+	var basic_atk_mult_pp: float = 0.0
+	var basic_atk_dmg_res_pp: float = 0.0
+
+	var boss_dmg_pp: float = 0.0
+	var boss_dmg_res_pp: float = 0.0
+
+	var final_dmg_boost_pp: float = 0.0
+	var final_dmg_res_pp: float = 0.0
+
+	var skill_crit_pp: float = 0.0
+	var skill_crit_dmg_pp: float = 0.0
+
+	# Bonus % to base attributes
+	var hp_bonus_pp: float = 0.0
+	var atk_bonus_pp: float = 0.0
+	var def_bonus_pp: float = 0.0
+	var atk_spd_bonus_pp: float = 0.0
 
 	for k in player.equipped.keys():
 		var it: GearItem = player.equipped.get(k, null)
 		if it == null or it.stats == null:
 			continue
 		var s: Stats = it.stats
+
 		hp_add += float(s.hp)
 		atk_add += float(s.atk)
 		def_add += float(s.def)
-		atk_spd += float(s.atk_spd)
+		atk_spd_add += float(s.atk_spd)
 
 		crit_pp += float(s.crit_chance)
+		crit_dmg_pp += float(s.crit_dmg)
+
 		combo_pp += float(s.combo_chance)
+		combo_dmg_pp += float(s.combo_dmg)
+
+		counter_pp += float(s.counter_chance)
+		counter_dmg_pp += float(s.counter_dmg)
+
+		stun_pp += float(s.stun_chance)
+
 		block_pp += float(s.block)
 		avoid_pp += float(s.avoidance)
+		regen_hps += float(s.regen)
 
-	_p_hp_max = max(1.0, base_hp + hp_add)
-	_p_atk = max(1.0, base_atk + atk_add)
-	_p_def = max(0.0, base_def + def_add)
+		basic_atk_mult_pp += float(s.basic_atk_mult)
+		basic_atk_dmg_res_pp += float(s.basic_atk_dmg_res)
 
-	# APS: base 1.0, plus atk_spd (treat as additive percent like 0.05 = +5%)
-	_p_aps = clamp(1.0 * (1.0 + atk_spd), 0.3, 10.0)
+		boss_dmg_pp += float(s.boss_dmg)
+		boss_dmg_res_pp += float(s.boss_dmg_res)
 
-	_p_crit = clamp(crit_pp / 100.0, 0.0, 0.75)
-	_p_combo = max(0.0, combo_pp)
-	_p_block = clamp(block_pp, 0.0, 75.0)
-	_p_avoid = clamp(avoid_pp, 0.0, 60.0)
+		final_dmg_boost_pp += float(s.final_dmg_boost_pct)
+		final_dmg_res_pp += float(s.final_dmg_res_pct)
+
+		skill_crit_pp += float(s.skill_crit_chance)
+		skill_crit_dmg_pp += float(s.skill_crit_dmg)
+
+		hp_bonus_pp += float(s.hp_bonus_pct)
+		atk_bonus_pp += float(s.atk_bonus_pct)
+		def_bonus_pp += float(s.def_bonus_pct)
+		atk_spd_bonus_pp += float(s.atk_spd_bonus_pct)
+
+	# Apply % bonuses to the base attributes
+	var raw_hp: float = base_hp + hp_add
+	var raw_atk: float = base_atk + atk_add
+	var raw_def: float = base_def + def_add
+
+	_p_hp_max = max(1.0, raw_hp * (1.0 + (hp_bonus_pp / 100.0)))
+	_p_atk = max(1.0, raw_atk * (1.0 + (atk_bonus_pp / 100.0)))
+	_p_def = max(0.0, raw_def * (1.0 + (def_bonus_pp / 100.0)))
+
+	# APS: keep your legacy meaning (atk_spd_add is additive percent), then apply atk_spd_bonus_pp
+	var aps_mult: float = (1.0 + atk_spd_add) * (1.0 + (atk_spd_bonus_pp / 100.0))
+	_p_aps = clampf(1.0 * aps_mult, 0.3, 10.0)
+
+	# Cache advanced stats
+	_p_crit_pp = clampf(crit_pp, 0.0, 100.0)
+	_p_crit_dmg_pp = maxf(0.0, crit_dmg_pp)
+
+	_p_combo_pp = maxf(0.0, combo_pp)          # allow > 100
+	_p_combo_dmg_pp = maxf(0.0, combo_dmg_pp)
+
+	_p_counter_pp = clampf(counter_pp, 0.0, 100.0)
+	_p_counter_dmg_pp = maxf(0.0, counter_dmg_pp)
+
+	_p_stun_pp = clampf(stun_pp, 0.0, 100.0)
+
+	_p_block = clampf(block_pp, 0.0, 75.0)
+	_p_avoid = clampf(avoid_pp, 0.0, 60.0)
+
+	_p_regen_hps = maxf(0.0, regen_hps)
+
+	_p_basic_atk_mult_pp = maxf(0.0, basic_atk_mult_pp)
+	_p_basic_atk_dmg_res_pp = clampf(basic_atk_dmg_res_pp, 0.0, RESIST_CAP_PP)
+
+	_p_boss_dmg_pp = maxf(0.0, boss_dmg_pp)
+	_p_boss_dmg_res_pp = clampf(boss_dmg_res_pp, 0.0, RESIST_CAP_PP)
+
+	_p_final_dmg_boost_pp = maxf(0.0, final_dmg_boost_pp)
+	_p_final_dmg_res_pp = clampf(final_dmg_res_pp, 0.0, RESIST_CAP_PP)
+
+	_p_skill_crit_pp = clampf(skill_crit_pp, 0.0, 100.0)
+	_p_skill_crit_dmg_pp = maxf(0.0, skill_crit_dmg_pp)
 
 func _finish_defeat_reset() -> void:
 	_defeat_pause_remaining = 0.0

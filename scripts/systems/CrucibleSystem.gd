@@ -49,7 +49,7 @@ func roll_rarity_for_level(crucible_level: int) -> int:
 func _pct_roll(rng: RNGService, min_pct: int, max_pct: int) -> float:
 	return float(rng.randi_range(min_pct, max_pct))
 
-func _roll_stats(slot: int, item_level: int, rarity: int, class_id: int) -> Stats:
+func _roll_stats(slot: int, item_level: int, rarity: int, _class_id: int) -> Stats:
 	var s := Stats.new()
 	var rng := (RNG as RNGService)
 
@@ -59,20 +59,6 @@ func _roll_stats(slot: int, item_level: int, rarity: int, class_id: int) -> Stat
 	# -----------------------------
 	# 1) Main stats (Common/Uncommon baseline)
 	# -----------------------------
-	var is_weapon: bool = (slot == Catalog.GearSlot.WEAPON)
-	var is_armor: bool = (
-		slot == Catalog.GearSlot.HELMET
-		or slot == Catalog.GearSlot.SHOULDERS
-		or slot == Catalog.GearSlot.CHEST
-		or slot == Catalog.GearSlot.GLOVES
-		or slot == Catalog.GearSlot.BELT
-		or slot == Catalog.GearSlot.LEGS
-		or slot == Catalog.GearSlot.BOOTS
-	)
-	var is_accessory: bool = (slot == Catalog.GearSlot.RING or slot == Catalog.GearSlot.BRACELET)
-
-	# Slot-flavored main stat coefficients (tune freely)
-	# These are intentionally simple and consistent with your new tier rules.
 	match slot:
 		Catalog.GearSlot.WEAPON:
 			# Weapon main stats: HP + ATK
@@ -122,32 +108,19 @@ func _roll_stats(slot: int, item_level: int, rarity: int, class_id: int) -> Stat
 			s.def = 0.5 + float(item_level) * 0.2
 
 	# -----------------------------
-	# 2) Rare+: add class main stat (STR/INT/AGI)
-	# -----------------------------
-	if _rarity_meets_or_above(rarity, Catalog.Rarity.RARE):
-		var v: float = 1.0 + float(item_level) * 0.25
-		match class_id:
-			PlayerModel.ClassId.WARRIOR:
-				s.str = v
-			PlayerModel.ClassId.MAGE:
-				s.int_ = v
-			PlayerModel.ClassId.ARCHER:
-				s.agi = v
-
-	# -----------------------------
-	# 3) Unique+: add 1 secondary stat (chance/defensive)
+	# 2) Unique+: add 1 secondary stat (chance/defensive)
 	# -----------------------------
 	if _rarity_meets_or_above(rarity, Catalog.Rarity.UNIQUE):
 		_add_secondary_tier1(s, slot, item_level, rng)
 
 	# -----------------------------
-	# 4) Mythic+: add another secondary stat (damage modifiers / utility)
+	# 3) Mythic+: add another secondary stat (damage modifiers / utility)
 	# -----------------------------
 	if _rarity_meets_or_above(rarity, Catalog.Rarity.MYTHIC):
 		_add_secondary_tier2(s, slot, item_level, rng)
 
 	return s.scaled(mult)
-	
+
 func _rarity_rank_map() -> Dictionary:
 	# Build once per call-site (small map; fine for MVP).
 	var m: Dictionary = {}

@@ -130,7 +130,15 @@ var _rename_confirm: Button = null
 @onready var crucible_row: Control = $RootMargin/RootVBox/CrucibleRow
 const CRUCIBLE_TEX := preload("res://assets/UI/crucible.png")
 const CRUCIBLE_SHEET_TEX := preload("res://assets/UI/crucible_spritesheet.png")
-const CRUCIBLE_IDLE_TEX := preload("res://assets/UI/crucible.png")
+const CRUCIBLE_IDLE_TEX := preload("res://assets/UI/crucible.png")# Currency icon asset paths
+const PATH_CURRENCY_GOLD: String = "res://assets/icons/UI/currency/gold.png"
+const PATH_CURRENCY_CRYSTALS: String = "res://assets/icons/UI/currency/crystals.png"
+const PATH_CURRENCY_DIAMONDS: String = "res://assets/icons/UI/currency/diamonds.png"
+
+var _tex_gold: Texture2D = null
+var _tex_crystals: Texture2D = null
+var _tex_diamonds: Texture2D = null
+
 
 const CRUCIBLE_SHEET_COLS := 5
 const CRUCIBLE_SHEET_ROWS := 5
@@ -148,6 +156,15 @@ var _crucible_art_btn: TextureButton = null
 var _crucible_keys_count_label: Label = null
 var _crucible_btn_base_scale: Vector2 = Vector2.ONE
 var _crucible_click_tween: Tween = null
+
+# --- HP bar shield visual ---
+const HP_BAR_SHIELD_COLOR := Color(0.25, 0.65, 1.0, 1.0) # tweak to taste
+
+var _hp_fill_normal: StyleBox = null
+var _hp_fill_shield: StyleBox = null
+var _hp_modulate_normal: Color = Color.WHITE
+var _hp_shield_visual_on: bool = false
+
 
 
 func _on_skills_pressed() -> void:
@@ -203,6 +220,8 @@ func _ready() -> void:
 		crucible_panel.connect("draw_pressed", _on_crucible_draw_pressed)
 	else:
 		push_warning("CruciblePanel has no draw_pressed signal. Is CruciblePanel.gd attached to the node?")
+	
+	_setup_currency_icons()
 	_setup_crucible_art_ui()
 	_build_crucible_click_frames()
 	_set_crucible_button_texture(CRUCIBLE_IDLE_TEX)
@@ -260,6 +279,10 @@ func _ready() -> void:
 	Game.player_changed.connect(func() -> void:
 		call_deferred("_maybe_prompt_advanced_class_selection")
 	)
+	
+	_cache_hp_bar_styles()
+	_update_hp_bar_visuals()
+
 
 func _process(delta: float) -> void:
 	_hud_ui_accum += delta
@@ -280,6 +303,7 @@ func _process(delta: float) -> void:
 
 	hp_bar.max_value = 100.0
 	hp_bar.value = (php / phpmax) * 100.0
+	_update_hp_bar_visuals()
 
 func _on_gear_slot_clicked(slot_id: int, item: GearItem) -> void:
 	# Ignore future slots (they’re disabled anyway, but safe)
@@ -452,7 +476,10 @@ func _refresh_hud_nonbattle() -> void:
 	if is_instance_valid(name_label):
 		name_label.text = "Hero"
 	if is_instance_valid(cp_label):
-		cp_label.text = "CP: %d" % p.combat_power()
+		var cp_val: int = int(p.combat_power())
+		cp_label.text = "CP: %s" % _fmt_compact_number(cp_val)
+		cp_label.tooltip_text = "CP: %d" % cp_val
+
 
 	# DO NOT touch hp_bar here. HP is driven by battle_runtime in _process().
 
@@ -462,11 +489,12 @@ func _refresh_hud_nonbattle() -> void:
 		xp_bar.value = Game.player.xp
 
 	if is_instance_valid(gold_label):
-		gold_label.text = "Gold: %d" % p.gold
+		gold_label.text = _fmt_compact_number(int(p.gold))
 	if is_instance_valid(diamonds_label):
-		diamonds_label.text = "Diamonds: %d" % p.diamonds
+		diamonds_label.text = _fmt_compact_number(int(p.diamonds))
 	if is_instance_valid(crystals_label):
-		crystals_label.text = "Crystals: %d" % p.crystals
+		crystals_label.text = _fmt_compact_number(int(p.crystals))
+
 
 	var pending: int = 0
 	if "deferred_gear" in p:
@@ -1730,3 +1758,140 @@ func _await_crucible_click_anim_if_possible() -> void:
 		await get_tree().process_frame
 
 	await _play_crucible_click_anim()
+
+func _safe_load_tex(path: String) -> Texture2D:
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return null
+
+func _make_currency_icon(tex: Texture2D, size: Vector2 = Vector2(22, 22)) -> TextureRect:
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.custom_minimum_size = size
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return tr
+
+func _wrap_currency_label_with_icon(lbl: Label, tex: Texture2D) -> void:
+	if lbl == null or tex == null:
+		return
+	if lbl.has_meta("currency_wrapped"):
+		return
+
+	var parent := lbl.get_parent()
+	if parent == null:
+		return
+
+	var idx := lbl.get_index()
+
+	# Create a row container and insert it where the label currently lives
+	var row := HBoxContainer.new()
+	row.name = lbl.name + "_Row"
+	row.add_theme_constant_override("separation", 6)
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+
+	
+	parent.add_child(row)
+	parent.move_child(row, idx)
+
+	# Reparent the label into the row, with an icon in front
+	parent.remove_child(lbl)
+	row.add_child(_make_currency_icon(tex, Vector2(32, 32)))
+	row.add_child(lbl)
+
+	# Mark so we don't wrap twice
+	lbl.set_meta("currency_wrapped", true)
+
+func _setup_currency_icons() -> void:
+	_tex_gold = _safe_load_tex(PATH_CURRENCY_GOLD)
+	_tex_crystals = _safe_load_tex(PATH_CURRENCY_CRYSTALS)
+	_tex_diamonds = _safe_load_tex(PATH_CURRENCY_DIAMONDS)
+
+	_wrap_currency_label_with_icon(gold_label, _tex_gold)
+	_wrap_currency_label_with_icon(crystals_label, _tex_crystals)
+	_wrap_currency_label_with_icon(diamonds_label, _tex_diamonds)
+
+func _fmt_compact_number(value: int) -> String:
+	# Shows:
+	#  - < 1,000 as full integer (e.g., "999")
+	#  - >= 1,000 with 1 decimal + suffix (e.g., "125.7K", "3.2M", "1.0B", "4.6T", "7.8Q")
+	const SUFFIXES := ["", "K", "M", "B", "T", "Q"]
+
+	var sign := ""
+	var n: float = float(value)
+	if n < 0.0:
+		sign = "-"
+		n = -n
+
+	var idx: int = 0
+	while n >= 1000.0 and idx < SUFFIXES.size() - 1:
+		n /= 1000.0
+		idx += 1
+
+	# Round to 1 decimal, but handle rollover (e.g., 999.95K -> 1.0M)
+	if idx > 0:
+		var rounded: float = round(n * 10.0) / 10.0
+		while rounded >= 1000.0 and idx < SUFFIXES.size() - 1:
+			rounded /= 1000.0
+			idx += 1
+		return sign + ("%0.1f%s" % [rounded, SUFFIXES[idx]])
+
+	# No suffix: show whole number
+	return sign + str(int(round(n)))
+
+func _cache_hp_bar_styles() -> void:
+	if not is_instance_valid(hp_bar):
+		return
+
+	_hp_modulate_normal = hp_bar.modulate
+
+	var fill := hp_bar.get_theme_stylebox("fill")
+	if fill == null:
+		_hp_fill_normal = null
+		_hp_fill_shield = null
+		return
+
+	# Duplicate so we don't mutate the theme's shared StyleBox
+	_hp_fill_normal = fill.duplicate()
+
+	# Only StyleBoxFlat reliably supports recoloring via bg_color
+	var shield_candidate := _hp_fill_normal.duplicate()
+	if shield_candidate is StyleBoxFlat:
+		(shield_candidate as StyleBoxFlat).bg_color = HP_BAR_SHIELD_COLOR
+		_hp_fill_shield = shield_candidate
+	else:
+		# Non-flat themes (e.g., textures) can't be recolored cleanly; fallback to modulate tint.
+		_hp_fill_shield = null
+
+func _update_hp_bar_visuals() -> void:
+	if not is_instance_valid(hp_bar) or Game == null:
+		return
+
+	var shield: float = float(Game.battle_runtime.get("player_shield", 0.0))
+	var has_shield := shield > 0.001
+
+	# Avoid re-applying theme overrides every UI tick
+	if has_shield == _hp_shield_visual_on:
+		return
+	_hp_shield_visual_on = has_shield
+
+	if has_shield:
+		# Prefer fill recolor if we can
+		if _hp_fill_shield != null:
+			hp_bar.add_theme_stylebox_override("fill", _hp_fill_shield)
+			hp_bar.modulate = _hp_modulate_normal
+		else:
+			# Fallback: tint entire control
+			hp_bar.modulate = HP_BAR_SHIELD_COLOR
+	else:
+		# Revert to normal
+		if _hp_fill_normal != null:
+			hp_bar.add_theme_stylebox_override("fill", _hp_fill_normal)
+		else:
+			# If we never cached a fill, remove any override just in case
+			hp_bar.remove_theme_stylebox_override("fill")
+		hp_bar.modulate = _hp_modulate_normal

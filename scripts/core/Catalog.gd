@@ -346,7 +346,6 @@ const BATTLE_DIFFICULTY_ORDER: Array[String] = [
 ]
 
 # --- Battle difficulty scaling (formula-based) ---
-# Everything is derived from difficulty index + level + stage + wave.
 
 # Base enemy stats at Easy / Lv1 / Stage1 / Wave1 (tune freely)
 const ENEMY_BASE_HP: float = 80.0
@@ -381,11 +380,6 @@ const BOSS_DEF_MULT: float = 1.12
 # Optional: stage “gateway” bosses (stage 5 and stage 10 bosses are extra spicy)
 const GATEWAY_BOSS_MULT: float = 1.20
 const FINAL_STAGE_BOSS_MULT: float = 1.35  # stage 10 boss additional
-
-
-#static func battle_difficulty_scalars(diff: String) -> Dictionary:
-	#return BATTLE_DIFFICULTY_SCALARS.get(diff, BATTLE_DIFFICULTY_SCALARS["Easy"])
-
 
 static func battle_difficulty_index(diff: String) -> int:
 	var idx: int = BATTLE_DIFFICULTY_ORDER.find(diff)
@@ -431,6 +425,125 @@ static func battle_enemy_multipliers(diff: String, level: int, stage: int, wave:
 			def_mult *= FINAL_STAGE_BOSS_MULT
 
 	return {"hp": hp_mult, "atk": atk_mult, "def": def_mult}
+
+# =================================================================================================
+# Boss Advanced Stats (Void I+)
+# - Only applies to bosses (wave 5) starting at difficulty "Void I" and beyond.
+# - As difficulty increases, bosses gain more *types* of advanced stats AND higher values.
+# =================================================================================================
+
+const BOSS_ADV_START_DIFF: String = "Void I"
+
+static func _clamp_pp(v: float, cap_pp: float = 90.0) -> float:
+	return clampf(v, 0.0, cap_pp)
+
+static func boss_advanced_stats(diff: String, level: int, stage: int) -> Dictionary:
+	# Return percent-point stats for the boss enemy.
+	# Keys are used directly by BattleSystem enemy-unit dictionaries.
+
+	var tier: int = battle_difficulty_index(diff)
+	var start: int = battle_difficulty_index(BOSS_ADV_START_DIFF)
+	if tier < 0 or start < 0 or tier < start:
+		return {}
+
+	var p: int = tier - start  # progress: Void I => 0, Void II => 1, ...
+
+	level = max(1, level)
+	stage = max(1, stage)
+
+	# Mild scaling by level/stage inside a difficulty
+	var scale: float = 1.0
+	scale += 0.03 * float(level - 1)
+	scale += 0.02 * float(stage - 1)
+
+	# Start with an all-keys dict so BattleSystem can safely .get() everything.
+	var d: Dictionary = {
+		# Offense
+		"crit_pp": 0.0,
+		"crit_dmg_pp": 0.0,
+		"combo_pp": 0.0,
+		"combo_mult_pp": 0.0,     # bonus percent to the extra-hit multiplier (BattleSystem applies it)
+		"counter_pp": 0.0,
+		"counter_mult_pp": 0.0,   # bonus percent to counter damage (BattleSystem applies it)
+		"stun_pp": 0.0,
+
+		# “Ignore” / penetration
+		"ignore_evasion_pp": 0.0,
+		"ignore_combo_pp": 0.0,
+		"ignore_counter_pp": 0.0,
+		"ignore_stun_pp": 0.0,
+
+		# Defense / mitigation
+		"crit_res_pp": 0.0,
+		"evasion_pp": 0.0,
+		"basic_atk_dmg_res_pp": 0.0,
+		"combo_dmg_res_pp": 0.0,
+		"counter_dmg_res_pp": 0.0,
+		"skill_dmg_res_pp": 0.0,
+		"final_dmg_res_pp": 0.0,
+
+		# Global damage knobs for the boss (optional but useful for later)
+		"basic_atk_mult_pp": 0.0,
+		"final_dmg_boost_pp": 0.0,
+	}
+
+	# ------------------------------------------
+	# Tier unlocks (more mechanics as p grows)
+	# ------------------------------------------
+
+	# Void I: crit + evasion + a little basic/final scaling
+	d["crit_pp"] = _clamp_pp((6.0 + 1.2 * float(p)) * scale)
+	d["crit_dmg_pp"] = maxf(0.0, (25.0 + 8.0 * float(p)) * scale)
+	d["evasion_pp"] = _clamp_pp((4.0 + 1.0 * float(p)) * scale, 60.0)
+	d["basic_atk_mult_pp"] = maxf(0.0, (8.0 + 2.0 * float(p)) * scale)
+	d["final_dmg_boost_pp"] = maxf(0.0, (4.0 + 1.0 * float(p)) * scale)
+
+	# Void II: crit resistance + ignore evasion
+	if p >= 1:
+		d["crit_res_pp"] = _clamp_pp((6.0 + 1.0 * float(p)) * scale)
+		d["ignore_evasion_pp"] = _clamp_pp((5.0 + 1.0 * float(p)) * scale)
+
+	# Void III: combo + combo multiplier
+	if p >= 2:
+		d["combo_pp"] = _clamp_pp((18.0 + 4.0 * float(p)) * scale, 150.0) # allow >100
+		d["combo_mult_pp"] = maxf(0.0, (10.0 + 5.0 * float(p)) * scale)
+
+	# Void IV: ignore combo + combo damage resistance
+	if p >= 3:
+		d["ignore_combo_pp"] = _clamp_pp((10.0 + 2.0 * float(p)) * scale)
+		d["combo_dmg_res_pp"] = _clamp_pp((8.0 + 2.0 * float(p)) * scale)
+
+	# Void V: stun + ignore stun
+	if p >= 4:
+		d["stun_pp"] = _clamp_pp((6.0 + 1.0 * float(p)) * scale)
+		d["ignore_stun_pp"] = _clamp_pp((10.0 + 2.0 * float(p)) * scale)
+
+	# Void VI: counter + counter multiplier
+	if p >= 5:
+		d["counter_pp"] = _clamp_pp((10.0 + 2.0 * float(p)) * scale)
+		d["counter_mult_pp"] = maxf(0.0, (25.0 + 7.0 * float(p)) * scale)
+
+	# Void VII: ignore counter + counter resistance
+	if p >= 6:
+		d["ignore_counter_pp"] = _clamp_pp((10.0 + 2.0 * float(p)) * scale)
+		d["counter_dmg_res_pp"] = _clamp_pp((10.0 + 2.0 * float(p)) * scale)
+
+	# Void VIII: basic resist + final resist
+	if p >= 7:
+		d["basic_atk_dmg_res_pp"] = _clamp_pp((10.0 + 2.0 * float(p)) * scale)
+		d["final_dmg_res_pp"] = _clamp_pp((8.0 + 2.0 * float(p)) * scale)
+
+	# Void IX+: skill damage resistance (sets you up for skill-heavy builds)
+	if p >= 8:
+		d["skill_dmg_res_pp"] = _clamp_pp((10.0 + 2.0 * float(p)) * scale)
+
+	return d
+
+static func battle_enemy_advanced_stats(diff: String, level: int, stage: int, wave: int, is_boss: bool) -> Dictionary:
+	# Public wrapper for BattleSystem.
+	if not is_boss:
+		return {}
+	return boss_advanced_stats(diff, level, stage)
 
 # Optional: per-difficulty overrides (can leave empty for now).
 const BATTLE_DIFFICULTY_RULES: Dictionary = {
