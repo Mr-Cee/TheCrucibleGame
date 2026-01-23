@@ -658,12 +658,22 @@ func _rarity_meets_threshold(rarity_id: int, min_rarity_id: int) -> bool:
 	return r_idx >= m_idx
 
 func _on_filter_pressed() -> void:
+	# Desired behavior:
+	# - If auto is ON, first tap turns it OFF (and does NOT open the window)
+	# - If auto is OFF, tap opens the auto/filter window
+
 	if _auto_running:
 		_stop_auto_draw()
-	
+		# Keep UI consistent and do not open popup on this tap.
+		# Also ensure the toggle button visual updates immediately.
+		_update_auto_indicator()
+		return
+
+	# Auto is OFF -> open settings window
 	_refresh_auto_popup()
 	_update_auto_popup_status()
 	auto_popup.popup_centered(Vector2i(560, 360))
+
 
 func _refresh_auto_popup() -> void:
 	var p := Game.player
@@ -1479,19 +1489,60 @@ func _class_bonus_text(cd: ClassDef) -> String:
 	var s: Stats = cd.passive_flat
 	var parts := PackedStringArray()
 
-	# These fields match what your game already uses (hp/atk/def/str/int_/agi/etc.)
-	if s.hp != 0: parts.append("HP %+d" % int(s.hp))
-	if s.atk != 0: parts.append("ATK %+d" % int(s.atk))
-	if s.def != 0: parts.append("Armor %+d" % int(s.def))
-	if s.str != 0: parts.append("STR %+d" % int(s.str))
-	if s.int_ != 0: parts.append("INT %+d" % int(s.int_))
-	if s.agi != 0: parts.append("AGI %+d" % int(s.agi))
-	if s.atk_spd != 0: parts.append("Atk Spd %+0.2f" % float(s.atk_spd))
-	if s.crit_chance != 0: parts.append("Crit %+d%%" % int(s.crit_chance))
-	if s.combo_chance != 0: parts.append("Combo %+d%%" % int(s.combo_chance))
-	if s.block != 0: parts.append("Block %+d%%" % int(s.block))
-	if s.avoidance != 0: parts.append("Avoid %+d%%" % int(s.avoidance))
+	# Flat core
+	if s.hp != 0: parts.append("HP %+d" % int(round(s.hp)))
+	if s.atk != 0: parts.append("ATK %+d" % int(round(s.atk)))
+	if s.def != 0: parts.append("DEF %+d" % int(round(s.def)))
+
+	# ATK SPD: if your passives use fractional values (0.15 = 15%), show as %
+	if s.atk_spd != 0:
+		if absf(s.atk_spd) <= 1.0:
+			parts.append("ATK SPD %+d%%" % int(round(s.atk_spd * 100.0)))
+		else:
+			parts.append("ATK SPD %+0.2f" % float(s.atk_spd))
+
+	# Basic (non-skill) crit
+	if s.crit_chance != 0: parts.append("Crit (Basic) %+d%%" % int(round(s.crit_chance)))
+	if s.crit_dmg != 0: parts.append("Crit DMG (Basic) %+d%%" % int(round(s.crit_dmg)))
+
+	# Combo / Counter
+	if s.combo_chance != 0: parts.append("Combo %+d%%" % int(round(s.combo_chance)))
+	if s.combo_dmg != 0: parts.append("Combo Mult %+d%%" % int(round(s.combo_dmg)))
+
+	if s.counter_chance != 0: parts.append("Counter %+d%%" % int(round(s.counter_chance)))
+	if s.counter_dmg != 0: parts.append("Counter Mult %+d%%" % int(round(s.counter_dmg)))
+
+	# Defense / sustain
+	if s.block != 0: parts.append("Block %+d%%" % int(round(s.block)))
+	if s.avoidance != 0: parts.append("Evasion %+d%%" % int(round(s.avoidance)))
 	if s.regen != 0: parts.append("Regen %+0.2f/s" % float(s.regen))
+
+	# New advanced stats
+	if s.skill_crit_chance != 0: parts.append("Skill Crit %+d%%" % int(round(s.skill_crit_chance)))
+	if s.skill_crit_dmg != 0: parts.append("Skill Crit DMG %+d%%" % int(round(s.skill_crit_dmg)))
+	if s.skill_dmg_res != 0: parts.append("Skill DMG RES %+d%%" % int(round(s.skill_dmg_res)))
+
+	if s.ignore_evasion != 0: parts.append("Ignore Evasion %+d%%" % int(round(s.ignore_evasion)))
+
+	if s.boss_dmg != 0: parts.append("Boss DMG %+d%%" % int(round(s.boss_dmg)))
+	if s.boss_dmg_res != 0: parts.append("Boss DMG RES %+d%%" % int(round(s.boss_dmg_res)))
+
+	if s.combo_dmg_res != 0: parts.append("Combo DMG RES %+d%%" % int(round(s.combo_dmg_res)))
+	if s.counter_dmg_res != 0: parts.append("Counter DMG RES %+d%%" % int(round(s.counter_dmg_res)))
+	if s.basic_atk_mult != 0: parts.append("Basic ATK Mult %+d%%" % int(round(s.basic_atk_mult)))
+	if s.basic_atk_dmg_res != 0: parts.append("Basic ATK DMG RES %+d%%" % int(round(s.basic_atk_dmg_res)))
+
+	if s.final_dmg_boost_pct != 0: parts.append("Final DMG Boost %+d%%" % int(round(s.final_dmg_boost_pct)))
+	if s.final_dmg_res_pct != 0: parts.append("Final DMG RES %+d%%" % int(round(s.final_dmg_res_pct)))
+
+	# Optional: show the % bonus-to-core stats if you ever use them in class defs
+	if s.hp_bonus_pct != 0: parts.append("HP Bonus %+d%%" % int(round(s.hp_bonus_pct)))
+	if s.atk_bonus_pct != 0: parts.append("ATK Bonus %+d%%" % int(round(s.atk_bonus_pct)))
+	if s.def_bonus_pct != 0: parts.append("DEF Bonus %+d%%" % int(round(s.def_bonus_pct)))
+	if s.atk_spd_bonus_pct != 0: parts.append("ATK SPD Bonus %+d%%" % int(round(s.atk_spd_bonus_pct)))
+
+	if parts.is_empty():
+		return "Bonuses: —"
 
 	return "Bonuses: " + ", ".join(parts)
 

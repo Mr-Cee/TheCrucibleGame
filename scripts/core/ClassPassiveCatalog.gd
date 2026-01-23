@@ -8,10 +8,10 @@ static var _defs: Dictionary = {}        # passive_id -> ClassPassiveDef
 static var _by_class: Dictionary = {}    # class_def_id -> Array[ClassPassiveDef]
 
 const CP_BY_TIER := {
-	1: [0, 30, 10, 15, 20, 25],
-	2: [0, 60, 25, 35, 45, 55],
-	3: [0, 100, 45, 60, 75, 90],
-	4: [0, 150, 70, 95, 120, 145],
+	1: [100, 200, 400, 800, 1600, 3200],
+	2: [500, 1000, 2000, 4000, 8000, 16000],
+	3: [1000, 2000, 4000, 8000, 16000, 32000],
+	4: [1500, 3000, 6000, 12000, 24000, 48000],
 }
 
 const HP_BY_TIER := {
@@ -42,75 +42,134 @@ const ATTR_BY_TIER := {
 	4: [0.0, 0.0, 9.0, 12.0, 16.0, 22.0],
 }
 
+# Attack Speed is fractional (0.10 = 10%)
 const APS_BY_TIER := {
-	1: [0.0, 0.0, 0.02, 0.03, 0.05, 0.07],
-	2: [0.0, 0.0, 0.03, 0.05, 0.07, 0.1],
-	3: [0.0, 0.0, 0.04, 0.06, 0.09, 0.12],
-	4: [0.0, 0.0, 0.05, 0.08, 0.11, 0.15],
+	1: [0.0, 0.0, 0.10, 0.15, 0.20, 0.25],
+	2: [0.0, 0.0, 0.15, 0.20, 0.25, 0.30],
+	3: [0.0, 0.0, 0.20, 0.25, 0.30, 0.40],
+	4: [0.0, 0.0, 0.25, 0.30, 0.40, 0.50],
 }
 
+# Percent-points (10 = +10%)
 const CRIT_CH_BY_TIER := {
-	1: [0.0, 0.0, 2.0, 3.0, 4.0, 5.0],
-	2: [0.0, 0.0, 3.0, 4.0, 6.0, 8.0],
-	3: [0.0, 0.0, 4.0, 6.0, 8.0, 11.0],
-	4: [0.0, 0.0, 5.0, 7.0, 10.0, 14.0],
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
 }
 
+# Percent bonus (50 = +50% crit damage)
 const CRIT_DMG_BY_TIER := {
-	1: [0.0, 0.0, 10.0, 15.0, 20.0, 30.0],
-	2: [0.0, 0.0, 15.0, 25.0, 35.0, 50.0],
-	3: [0.0, 0.0, 20.0, 35.0, 50.0, 70.0],
-	4: [0.0, 0.0, 30.0, 45.0, 65.0, 90.0],
+	1: [0.0, 0.0, 20.0, 30.0, 40.0, 50.0],
+	2: [0.0, 0.0, 30.0, 40.0, 50.0, 60.0],
+	3: [0.0, 0.0, 40.0, 50.0, 60.0, 70.0],
+	4: [0.0, 0.0, 50.0, 60.0, 70.0, 80.0],
 }
 
 const COMBO_CH_BY_TIER := {
-	1: [0.0, 0.0, 3.0, 5.0, 7.0, 10.0],
-	2: [0.0, 0.0, 5.0, 7.0, 10.0, 14.0],
-	3: [0.0, 0.0, 7.0, 10.0, 14.0, 20.0],
-	4: [0.0, 0.0, 10.0, 14.0, 20.0, 28.0],
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
 }
 
 const COMBO_DMG_BY_TIER := {
-	1: [0.0, 0.0, 10.0, 15.0, 25.0, 35.0],
-	2: [0.0, 0.0, 15.0, 25.0, 35.0, 50.0],
-	3: [0.0, 0.0, 20.0, 35.0, 50.0, 70.0],
-	4: [0.0, 0.0, 30.0, 45.0, 65.0, 90.0],
-}
-
-const BLOCK_BY_TIER := {
-	1: [0.0, 0.0, 2.0, 3.0, 4.0, 6.0],
-	2: [0.0, 0.0, 4.0, 6.0, 8.0, 11.0],
-	3: [0.0, 0.0, 6.0, 8.0, 11.0, 15.0],
-	4: [0.0, 0.0, 8.0, 11.0, 15.0, 20.0],
-}
-
-const AVOID_BY_TIER := {
-	1: [0.0, 0.0, 2.0, 3.0, 4.0, 6.0],
-	2: [0.0, 0.0, 4.0, 6.0, 8.0, 11.0],
-	3: [0.0, 0.0, 6.0, 8.0, 11.0, 15.0],
-	4: [0.0, 0.0, 8.0, 11.0, 15.0, 20.0],
+	1: [0.0, 0.0, 20.0, 30.0, 40.0, 50.0],
+	2: [0.0, 0.0, 30.0, 40.0, 50.0, 60.0],
+	3: [0.0, 0.0, 40.0, 50.0, 60.0, 70.0],
+	4: [0.0, 0.0, 50.0, 60.0, 70.0, 80.0],
 }
 
 const COUNTER_CH_BY_TIER := {
-	1: [0.0, 0.0, 3.0, 5.0, 7.0, 10.0],
-	2: [0.0, 0.0, 5.0, 7.0, 10.0, 14.0],
-	3: [0.0, 0.0, 7.0, 10.0, 14.0, 20.0],
-	4: [0.0, 0.0, 10.0, 14.0, 20.0, 28.0],
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
 }
 
 const COUNTER_DMG_BY_TIER := {
-	1: [0.0, 0.0, 15.0, 25.0, 35.0, 50.0],
-	2: [0.0, 0.0, 25.0, 40.0, 55.0, 80.0],
-	3: [0.0, 0.0, 35.0, 55.0, 80.0, 110.0],
-	4: [0.0, 0.0, 50.0, 80.0, 110.0, 160.0],
+	1: [0.0, 0.0, 20.0, 30.0, 40.0, 50.0],
+	2: [0.0, 0.0, 30.0, 40.0, 50.0, 60.0],
+	3: [0.0, 0.0, 40.0, 50.0, 60.0, 70.0],
+	4: [0.0, 0.0, 50.0, 60.0, 70.0, 80.0],
 }
 
-const REGEN_BY_TIER := {
-	1: [0.0, 0.0, 0.2, 0.35, 0.5, 0.75],
-	2: [0.0, 0.0, 0.35, 0.6, 0.85, 1.25],
-	3: [0.0, 0.0, 0.55, 0.9, 1.3, 1.9],
-	4: [0.0, 0.0, 0.8, 1.3, 1.9, 2.7],
+const BLOCK_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
 }
+
+const AVOID_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
+}
+
+# Regen is flat HP/sec; scale it up but not into absurd territory
+const REGEN_BY_TIER := {
+	1: [0.0, 0.0, 0.50, 0.75, 1.00, 1.50],
+	2: [0.0, 0.0, 0.75, 1.10, 1.60, 2.25],
+	3: [0.0, 0.0, 1.00, 1.60, 2.30, 3.25],
+	4: [0.0, 0.0, 1.50, 2.25, 3.25, 4.75],
+}
+
+# Mage-line focus
+const SKILL_CRIT_CH_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
+}
+
+const SKILL_CRIT_DMG_BY_TIER := {
+	1: [0.0, 0.0, 20.0, 30.0, 40.0, 50.0],
+	2: [0.0, 0.0, 30.0, 40.0, 50.0, 60.0],
+	3: [0.0, 0.0, 40.0, 50.0, 60.0, 70.0],
+	4: [0.0, 0.0, 50.0, 60.0, 70.0, 80.0],
+}
+
+# "Skill damage boost" (closest existing stat in your Stats.gd is final_dmg_boost_pct)
+const FINAL_DMG_BOOST_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
+}
+
+# Shared / utility new stats
+const IGNORE_EVASION_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 12.0, 18.0, 24.0, 30.0],
+	3: [0.0, 0.0, 15.0, 22.0, 30.0, 40.0],
+	4: [0.0, 0.0, 18.0, 25.0, 35.0, 45.0],
+}
+
+const BOSS_DMG_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 15.0, 20.0, 25.0, 30.0],
+	3: [0.0, 0.0, 20.0, 25.0, 30.0, 40.0],
+	4: [0.0, 0.0, 25.0, 30.0, 40.0, 50.0],
+}
+
+# Warrior-line defensive counter flavor, Mage-line defensive skill flavor
+const COUNTER_DMG_RES_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 12.0, 18.0, 24.0, 30.0],
+	3: [0.0, 0.0, 15.0, 22.0, 30.0, 40.0],
+	4: [0.0, 0.0, 18.0, 25.0, 35.0, 45.0],
+}
+
+const SKILL_DMG_RES_BY_TIER := {
+	1: [0.0, 0.0, 10.0, 15.0, 20.0, 25.0],
+	2: [0.0, 0.0, 12.0, 18.0, 24.0, 30.0],
+	3: [0.0, 0.0, 15.0, 22.0, 30.0, 40.0],
+	4: [0.0, 0.0, 18.0, 25.0, 35.0, 45.0],
+}
+
+
 
 const ROMAN := ["I", "II", "III", "IV"]
 
@@ -118,19 +177,32 @@ const STAT_NOUN := {
 	"hp": "Vitality",
 	"atk": "Might",
 	"def": "Fortitude",
-	"str": "Strength",
-	"int": "Intellect",
-	"agi": "Agility",
 	"atk_spd": "Swiftness",
-	"crit_chance": "Killer Instinct",
+
+	# Basic attack crit (non-skill)
+	"crit_chance": "Weapon Precision",
 	"crit_dmg": "Lethality",
+
+	# Archer line
 	"combo_chance": "Combo Mastery",
 	"combo_dmg": "Combo Power",
-	"block": "Shieldcraft",
-	"avoidance": "Evasion",
+
+	# Warrior line
 	"counter_chance": "Retaliation",
 	"counter_dmg": "Counter Force",
+
+	"block": "Shieldcraft",
+	"avoidance": "Evasion",
 	"regen": "Regeneration",
+
+	# New stats
+	"skill_crit_chance": "Arcane Precision",
+	"skill_crit_dmg": "Spell Lethality",
+	"final_dmg_boost_pct": "Destruction",
+	"ignore_evasion": "True Aim",
+	"boss_dmg": "Slayer",
+	"counter_dmg_res": "Counterguard",
+	"skill_dmg_res": "Wardcraft",
 }
 
 const CLASS_IDS: Array[String] = ["warrior", "knight", "berserker", "paladin", "sentinel", "warlord", "bloodreaver", "crusader", "templar", "bulwark", "ironclad", "warmaster", "conqueror", "slaughterlord", "dreadknight", "mage", "sorcerer", "warlock", "archmage", "spellblade", "hexer", "necromancer", "arcanist", "elementalist", "battlemage", "magus_assassin", "curse_lord", "void_scholar", "lich", "deathcaller", "archer", "ranger", "rogue", "sharpshooter", "beastmaster", "assassin", "shadowdancer", "deadeye", "sniper", "primal_warden", "wildcaller", "nightblade", "phantom", "bladedancer", "umbral_stalker"]
@@ -594,51 +666,62 @@ const SIGNATURES := {
 }
 
 const STAT_PLANS := {
-	"warrior": [["hp"], ["def"], ["block"], ["str"]],
-	"knight": [["def"], ["hp"], ["block"], ["regen"]],
-	"berserker": [["atk"], ["atk_spd"], ["crit_chance"], ["str"]],
+	# ----------------
+	# Warrior line (Counter)
+	# ----------------
+	"warrior": [["hp"], ["def"], ["counter_chance"], ["counter_dmg"]],
+	"knight": [["def"], ["hp"], ["block"], ["counter_dmg_res"]],
+	"berserker": [["atk"], ["atk_spd"], ["counter_chance"], ["counter_dmg"]],
 	"paladin": [["hp"], ["def"], ["regen"], ["block"]],
 	"sentinel": [["def"], ["hp"], ["counter_chance"], ["counter_dmg"]],
-	"warlord": [["atk"], ["combo_chance"], ["str"], ["atk_spd"]],
-	"bloodreaver": [["atk"], ["crit_chance"], ["crit_dmg"], ["hp"]],
+	"warlord": [["atk"], ["combo_chance"], ["counter_chance"], ["atk_spd"]],
+	"bloodreaver": [["atk"], ["crit_chance"], ["crit_dmg"], ["counter_chance"]],
 	"crusader": [["hp"], ["def"], ["block"], ["regen"]],
 	"templar": [["atk"], ["crit_chance"], ["block"], ["atk_spd"]],
-	"bulwark": [["hp"], ["def"], ["block"], ["hp"]],
+	"bulwark": [["hp"], ["def"], ["block"], ["counter_dmg_res"]],
 	"ironclad": [["counter_chance"], ["counter_dmg"], ["def"], ["hp"]],
-	"warmaster": [["atk"], ["hp"], ["combo_chance"], ["crit_chance"]],
-	"conqueror": [["atk"], ["atk_spd"], ["combo_chance"], ["crit_dmg"]],
+	"warmaster": [["atk"], ["hp"], ["counter_chance"], ["boss_dmg"]],
+	"conqueror": [["atk"], ["atk_spd"], ["counter_chance"], ["crit_dmg"]],
 	"slaughterlord": [["atk"], ["crit_chance"], ["hp"], ["regen"]],
-	"dreadknight": [["def"], ["atk"], ["hp"], ["crit_chance"]],
-	"mage": [["int"], ["atk"], ["crit_chance"], ["crit_dmg"]],
-	"sorcerer": [["crit_chance"], ["crit_dmg"], ["int"], ["atk"]],
-	"warlock": [["int"], ["hp"], ["regen"], ["def"]],
-	"archmage": [["int"], ["atk"], ["crit_chance"], ["atk_spd"]],
-	"spellblade": [["atk"], ["def"], ["atk_spd"], ["crit_dmg"]],
-	"hexer": [["int"], ["crit_chance"], ["def"], ["hp"]],
-	"necromancer": [["int"], ["hp"], ["regen"], ["atk"]],
-	"arcanist": [["int"], ["atk"], ["crit_chance"], ["crit_dmg"]],
-	"elementalist": [["int"], ["atk"], ["atk_spd"], ["crit_chance"]],
-	"battlemage": [["hp"], ["def"], ["atk"], ["atk_spd"]],
-	"magus_assassin": [["crit_chance"], ["crit_dmg"], ["atk_spd"], ["avoidance"]],
-	"curse_lord": [["int"], ["atk"], ["regen"], ["crit_chance"]],
-	"void_scholar": [["int"], ["atk"], ["crit_dmg"], ["atk_spd"]],
-	"lich": [["hp"], ["def"], ["int"], ["regen"]],
-	"deathcaller": [["int"], ["atk"], ["combo_chance"], ["atk_spd"]],
-	"archer": [["agi"], ["atk_spd"], ["crit_chance"], ["combo_chance"]],
-	"ranger": [["agi"], ["atk_spd"], ["crit_chance"], ["atk"]],
-	"rogue": [["avoidance"], ["crit_chance"], ["atk_spd"], ["atk"]],
+	"dreadknight": [["def"], ["atk"], ["hp"], ["counter_chance"]],
+
+	# ----------------
+	# Mage line (Skill damage / skill crit)
+	# ----------------
+	"mage": [["skill_crit_chance"], ["skill_crit_dmg"], ["final_dmg_boost_pct"], ["ignore_evasion"]],
+	"sorcerer": [["skill_crit_chance"], ["skill_crit_dmg"], ["atk"], ["final_dmg_boost_pct"]],
+	"warlock": [["skill_crit_chance"], ["hp"], ["regen"], ["skill_crit_dmg"]],
+	"archmage": [["skill_crit_chance"], ["final_dmg_boost_pct"], ["atk_spd"], ["skill_crit_dmg"]],
+	"spellblade": [["atk"], ["def"], ["skill_crit_chance"], ["skill_crit_dmg"]],
+	"hexer": [["skill_crit_chance"], ["ignore_evasion"], ["def"], ["hp"]],
+	"necromancer": [["skill_crit_chance"], ["hp"], ["regen"], ["final_dmg_boost_pct"]],
+	"arcanist": [["skill_crit_chance"], ["final_dmg_boost_pct"], ["skill_crit_dmg"], ["ignore_evasion"]],
+	"elementalist": [["skill_crit_chance"], ["atk"], ["atk_spd"], ["final_dmg_boost_pct"]],
+	"battlemage": [["hp"], ["def"], ["skill_crit_chance"], ["final_dmg_boost_pct"]],
+	"magus_assassin": [["skill_crit_chance"], ["skill_crit_dmg"], ["atk_spd"], ["avoidance"]],
+	"curse_lord": [["skill_crit_chance"], ["final_dmg_boost_pct"], ["regen"], ["skill_crit_dmg"]],
+	"void_scholar": [["skill_crit_chance"], ["skill_crit_dmg"], ["final_dmg_boost_pct"], ["boss_dmg"]],
+	"lich": [["hp"], ["def"], ["skill_crit_chance"], ["skill_dmg_res"]],
+	"deathcaller": [["skill_crit_chance"], ["atk"], ["atk_spd"], ["final_dmg_boost_pct"]],
+
+	# ----------------
+	# Archer line (Combo)
+	# ----------------
+	"archer": [["combo_chance"], ["atk_spd"], ["combo_dmg"], ["ignore_evasion"]],
+	"ranger": [["combo_chance"], ["atk_spd"], ["ignore_evasion"], ["atk"]],
+	"rogue": [["avoidance"], ["crit_chance"], ["combo_chance"], ["atk_spd"]],
 	"sharpshooter": [["crit_chance"], ["crit_dmg"], ["atk"], ["atk_spd"]],
 	"beastmaster": [["hp"], ["atk"], ["atk_spd"], ["combo_chance"]],
-	"assassin": [["crit_chance"], ["crit_dmg"], ["avoidance"], ["atk"]],
-	"shadowdancer": [["avoidance"], ["atk_spd"], ["combo_chance"], ["crit_chance"]],
-	"deadeye": [["crit_chance"], ["crit_dmg"], ["atk"], ["atk_spd"]],
-	"sniper": [["atk"], ["crit_dmg"], ["crit_chance"], ["atk_spd"]],
-	"primal_warden": [["hp"], ["def"], ["block"], ["atk"]],
-	"wildcaller": [["atk"], ["atk_spd"], ["combo_chance"], ["crit_chance"]],
+	"assassin": [["crit_chance"], ["crit_dmg"], ["avoidance"], ["combo_chance"]],
+	"shadowdancer": [["avoidance"], ["atk_spd"], ["combo_chance"], ["combo_dmg"]],
+	"deadeye": [["crit_chance"], ["crit_dmg"], ["atk"], ["boss_dmg"]],
+	"sniper": [["atk"], ["crit_dmg"], ["ignore_evasion"], ["boss_dmg"]],
+	"primal_warden": [["hp"], ["def"], ["block"], ["counter_chance"]],
+	"wildcaller": [["atk"], ["atk_spd"], ["combo_chance"], ["combo_dmg"]],
 	"nightblade": [["crit_chance"], ["crit_dmg"], ["combo_chance"], ["atk_spd"]],
-	"phantom": [["avoidance"], ["atk_spd"], ["crit_chance"], ["atk"]],
-	"bladedancer": [["atk_spd"], ["combo_chance"], ["avoidance"], ["atk"]],
-	"umbral_stalker": [["atk"], ["atk_spd"], ["crit_chance"], ["combo_chance"]],
+	"phantom": [["avoidance"], ["atk_spd"], ["combo_chance"], ["ignore_evasion"]],
+	"bladedancer": [["atk_spd"], ["combo_chance"], ["combo_dmg"], ["avoidance"]],
+	"umbral_stalker": [["atk"], ["atk_spd"], ["combo_chance"], ["combo_dmg"]],
 }
 
 static func get_def(id: String) -> ClassPassiveDef:
@@ -707,17 +790,32 @@ static func _stat_value(stat_key: String, tier: int, slot: int) -> float:
 		"hp": return _tbl_val(HP_BY_TIER, tier, slot)
 		"atk": return _tbl_val(ATK_BY_TIER, tier, slot)
 		"def": return _tbl_val(DEF_BY_TIER, tier, slot)
-		"str", "int", "agi": return _tbl_val(ATTR_BY_TIER, tier, slot)
+
 		"atk_spd": return _tbl_val(APS_BY_TIER, tier, slot)
+
+		# Basic attack crit
 		"crit_chance": return _tbl_val(CRIT_CH_BY_TIER, tier, slot)
 		"crit_dmg": return _tbl_val(CRIT_DMG_BY_TIER, tier, slot)
+
+		# Combo / Counter
 		"combo_chance": return _tbl_val(COMBO_CH_BY_TIER, tier, slot)
 		"combo_dmg": return _tbl_val(COMBO_DMG_BY_TIER, tier, slot)
-		"block": return _tbl_val(BLOCK_BY_TIER, tier, slot)
-		"avoidance": return _tbl_val(AVOID_BY_TIER, tier, slot)
 		"counter_chance": return _tbl_val(COUNTER_CH_BY_TIER, tier, slot)
 		"counter_dmg": return _tbl_val(COUNTER_DMG_BY_TIER, tier, slot)
+
+		# Defense/utility
+		"block": return _tbl_val(BLOCK_BY_TIER, tier, slot)
+		"avoidance": return _tbl_val(AVOID_BY_TIER, tier, slot)
 		"regen": return _tbl_val(REGEN_BY_TIER, tier, slot)
+
+		# New: skill-focused + utility
+		"skill_crit_chance": return _tbl_val(SKILL_CRIT_CH_BY_TIER, tier, slot)
+		"skill_crit_dmg": return _tbl_val(SKILL_CRIT_DMG_BY_TIER, tier, slot)
+		"final_dmg_boost_pct": return _tbl_val(FINAL_DMG_BOOST_BY_TIER, tier, slot)
+		"ignore_evasion": return _tbl_val(IGNORE_EVASION_BY_TIER, tier, slot)
+		"boss_dmg": return _tbl_val(BOSS_DMG_BY_TIER, tier, slot)
+		"counter_dmg_res": return _tbl_val(COUNTER_DMG_RES_BY_TIER, tier, slot)
+		"skill_dmg_res": return _tbl_val(SKILL_DMG_RES_BY_TIER, tier, slot)
 	return 0.0
 
 static func _apply_stat(s: Stats, stat_key: String, v: float) -> void:
@@ -725,38 +823,63 @@ static func _apply_stat(s: Stats, stat_key: String, v: float) -> void:
 		"hp": s.hp = v
 		"atk": s.atk = v
 		"def": s.def = v
-		"str": s.str = v
-		"int": s.int_ = v
-		"agi": s.agi = v
 		"atk_spd": s.atk_spd = v
+
 		"crit_chance": s.crit_chance = v
 		"crit_dmg": s.crit_dmg = v
+
 		"combo_chance": s.combo_chance = v
 		"combo_dmg": s.combo_dmg = v
-		"block": s.block = v
-		"avoidance": s.avoidance = v
+
 		"counter_chance": s.counter_chance = v
 		"counter_dmg": s.counter_dmg = v
+
+		"block": s.block = v
+		"avoidance": s.avoidance = v
 		"regen": s.regen = v
+
+		# New stats
+		"skill_crit_chance": s.skill_crit_chance = v
+		"skill_crit_dmg": s.skill_crit_dmg = v
+		"final_dmg_boost_pct": s.final_dmg_boost_pct = v
+		"ignore_evasion": s.ignore_evasion = v
+		"boss_dmg": s.boss_dmg = v
+		"counter_dmg_res": s.counter_dmg_res = v
+		"skill_dmg_res": s.skill_dmg_res = v
 
 static func _format_stat_line(stat_key: String, v: float) -> String:
 	match stat_key:
+		# Fractional
 		"atk_spd": return "+%d%% Attack Speed" % int(round(v * 100.0))
+
+		# Flat
 		"regen": return "+%.2f Regen/s" % v
-		"str": return "+%d STR" % int(round(v))
-		"int": return "+%d INT" % int(round(v))
-		"agi": return "+%d AGI" % int(round(v))
 		"hp": return "+%d HP" % int(round(v))
 		"atk": return "+%d ATK" % int(round(v))
 		"def": return "+%d DEF" % int(round(v))
-		"crit_chance": return "+%d%% Crit Chance" % int(round(v))
-		"crit_dmg": return "+%d%% Crit Damage" % int(round(v))
+
+		# Basic attack crit (not skills)
+		"crit_chance": return "+%d%% Crit Rate (Basic)" % int(round(v))
+		"crit_dmg": return "+%d%% Crit DMG (Basic)" % int(round(v))
+
+		# Combo / Counter
 		"combo_chance": return "+%d%% Combo Chance" % int(round(v))
-		"combo_dmg": return "+%d%% Combo Damage" % int(round(v))
-		"block": return "+%d%% Block" % int(round(v))
-		"avoidance": return "+%d%% Avoid" % int(round(v))
+		"combo_dmg": return "+%d%% Combo Mult" % int(round(v))
 		"counter_chance": return "+%d%% Counter Chance" % int(round(v))
-		"counter_dmg": return "+%d%% Counter Damage" % int(round(v))
+		"counter_dmg": return "+%d%% Counter Mult" % int(round(v))
+
+		# Defense/utility
+		"block": return "+%d%% Block" % int(round(v))
+		"avoidance": return "+%d%% Evasion" % int(round(v))
+
+		# New stats
+		"skill_crit_chance": return "+%d%% Skill Crit" % int(round(v))
+		"skill_crit_dmg": return "+%d%% Skill Crit DMG" % int(round(v))
+		"final_dmg_boost_pct": return "+%d%% Damage Boost" % int(round(v))
+		"ignore_evasion": return "+%d%% Ignore Evasion" % int(round(v))
+		"boss_dmg": return "+%d%% Boss Damage" % int(round(v))
+		"counter_dmg_res": return "+%d%% Counter DMG RES" % int(round(v))
+		"skill_dmg_res": return "+%d%% Skill DMG RES" % int(round(v))
 	return "+%s %s" % [str(v), stat_key]
 
 static func _register(def: ClassPassiveDef) -> void:
