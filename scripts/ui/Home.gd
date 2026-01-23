@@ -407,8 +407,12 @@ func show_compare(item: GearItem, from_deferred: bool = false) -> void:
 	compare_popup.popup_centered(Vector2i(520, 420))
 
 func _show_compare_and_wait(item: GearItem, from_deferred: bool = false) -> void:
+	# Defer showing compare until no other panels/windows are open.
+	await _wait_until_compare_allowed()
+
 	show_compare(item, from_deferred)
 	await compare_resolved
+
 
 func _on_equip_pressed() -> void:
 	if _pending_item == null:
@@ -674,7 +678,6 @@ func _on_filter_pressed() -> void:
 	_update_auto_popup_status()
 	auto_popup.popup_centered(Vector2i(560, 360))
 
-
 func _refresh_auto_popup() -> void:
 	var p := Game.player
 	var cl: int = p.crucible_level
@@ -753,6 +756,46 @@ func _update_auto_popup_status() -> void:
 		start_stop_button.text = "Start Auto"
 		
 	_update_auto_indicator()
+
+func _has_blocking_ui_for_compare() -> bool:
+	# If your class selection overlay is up, that definitely blocks compare.
+	if _class_select_overlay != null:
+		return true
+
+	# Any other Window popups in Home (exclude ComparePopup itself).
+	if is_instance_valid(auto_popup) and auto_popup.visible:
+		return true
+	if is_instance_valid(voucher_popup) and voucher_popup.visible:
+		return true
+	if is_instance_valid(crucible_upgrade_popup) and crucible_upgrade_popup.visible:
+		return true
+	if is_instance_valid(dev_popup) and dev_popup.visible:
+		return true
+
+	# Any other panels/windows living in the global popup root (SkillsPanel, DungeonsPanel, etc.)
+	if Game != null and Game.has_method("popup_root"):
+		var pr := Game.popup_root()
+		if is_instance_valid(pr):
+			for child in pr.get_children():
+				if not is_instance_valid(child):
+					continue
+
+				# Most of your panels are Controls (CanvasItem). If it's visible, it's blocking.
+				if child is CanvasItem:
+					var ci := child as CanvasItem
+					if ci.is_visible_in_tree():
+						return true
+				# Safety for anything that isn't a CanvasItem but still toggles visibility.
+				elif child.has_method("is_visible_in_tree") and child.is_visible_in_tree():
+					return true
+
+	return false
+
+func _wait_until_compare_allowed() -> void:
+	# Wait until the UI is clear before opening ComparePopup.
+	# Using a small timer avoids a tight per-frame loop.
+	while _has_blocking_ui_for_compare():
+		await get_tree().create_timer(0.10).timeout
 
 func _stop_auto_draw() -> void:
 	if not _auto_running:
