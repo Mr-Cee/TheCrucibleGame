@@ -47,9 +47,38 @@ const DOCK_SEPARATION: int = 6
 # Placeholder battlefield visuals (player + enemy squares)
 var _battlefield_row: HBoxContainer = null
 #var _player_square: ColorRect = null
-var _enemies_grid: GridContainer = null
+#var _enemies_grid: GridContainer = null
+var _battlefield_canvas: Control = null
 var _enemy_squares: Array[Control] = []
 var _last_enemy_count: int = -1
+
+# Layout tuning
+const PLAYER_X_FRAC: float = 0.18          # player center at ~18% of canvas width (move left/right here)
+const PLAYER_GROUND_PAD: float = 6.0
+
+const ENEMY_PACK_X_FRAC: float = 0.52      # enemy pack center at ~78% of canvas width
+const ENEMY_COLS: int = 3                  # enemies arranged in 3 columns
+const ENEMY_X_SPACING: float = 56.0        # horizontal spacing between enemies
+const ENEMY_Y_SPACING: float = 34.0        # vertical stagger between rows (smaller => more overlap)
+
+const ENEMY_JITTER_X: float = 32.0         # random +/- x offset per enemy (stable per wave)
+const ENEMY_JITTER_Y: float = 14.0         # random +/- y offset per enemy (stable per wave)
+
+var _enemy_jitter: Array[Vector2] = []
+var _enemy_layout_key: String = ""
+
+const ENEMY_MIN_GAP_PX: float = 80.0   # distance between player center and enemy pack center
+const ENEMY_LERP: float = 0.18          # movement smoothing (one-liner lerp factor)
+
+const ENEMY_SPAWN_OFFSCREEN_PAD_PX: float = 80.0  # how far off the right edge they start
+const ENEMY_SPAWN_STAGGER_PX: float = 18.0        # optional: spreads their start X a bit
+
+const ENEMY_ENTER_STAGGER_SEC: float = 0.28        # delay between each enemy starting to move
+const ENEMY_ENTER_DURATION_SEC: float = 2.1       # how long each enemy takes to reach position (bigger = slower)
+const ENEMY_FOLLOW_LERP: float = 0.08              # after they arrive, how gently they follow layout changes
+
+var _enemy_enter_t0_ms: int = 0
+
 
 const ENEMY_DIR := "res://assets/enemies"
 const ENEMY_FALLBACK := preload("res://assets/enemies/enemy_goblin.png")
@@ -137,6 +166,14 @@ func _ready() -> void:
 	_scroll_log_to_bottom()
 
 func _process(delta: float) -> void:
+	## Update battlefield positions every frame for smooth approach
+	if Game != null and Game.has_method("get_enemies_snapshot") and _battlefield_canvas != null:
+		var enemies: Array[Dictionary] = Game.get_enemies_snapshot()
+		if _enemy_squares.size() == enemies.size() and _enemy_squares.size() > 0:
+			_layout_battlefield(enemies.size())
+
+
+	
 	_ui_accum += delta
 	if _ui_accum < 0.10:
 		return
@@ -460,65 +497,42 @@ func _queue_task_panel_reposition() -> void:
 	call_deferred("_reposition_task_panel")
 
 func _ensure_battlefield_ui() -> void:
-	# Create a simple row of squares for player + enemies. Insert under combat log.
 	if _battlefield_row != null:
 		return
 
 	_battlefield_row = HBoxContainer.new()
 	_battlefield_row.name = "BattlefieldRow"
 	_battlefield_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_battlefield_row.add_theme_constant_override("separation", 12)
-	
-	# Reserve enough height for sprites + HP bars, but do NOT expand and steal log space.
-	_battlefield_row.custom_minimum_size = Vector2(0, 150) # tweak 120–200
+
+	# Reserve enough height for sprites; don't steal log space.
+	_battlefield_row.custom_minimum_size = Vector2(0, 150)
 	_battlefield_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_battlefield_row.size_flags_stretch_ratio = 0.0
 
-	# Push player + enemies to the bottom of this row.
-	_battlefield_row.alignment = BoxContainer.ALIGNMENT_END
-	
-	# Push player away from the left edge.
-	var left_pad := Control.new()
-	left_pad.name = "PlayerLeftPad"
-	left_pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_pad.size_flags_stretch_ratio = 1.0
-	_battlefield_row.add_child(left_pad)
+	# Free-layout battlefield canvas (full width)
+	_battlefield_canvas = Control.new()
+	_battlefield_canvas.name = "BattlefieldCanvas"
+	_battlefield_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_battlefield_canvas.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_battlefield_canvas.custom_minimum_size = Vector2(0, 150)
+	_battlefield_canvas.clip_contents = true
+	_battlefield_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_battlefield_row.add_child(_battlefield_canvas)
 
-	# Player sprite
+	# Player sprite (added to canvas)
 	_player_sprite = TextureRect.new()
 	_player_sprite.name = "PlayerSprite"
-	_player_sprite.custom_minimum_size = Vector2(100, 100) # tune to match enemy sprite scale
+	_player_sprite.custom_minimum_size = Vector2(100, 100)
 	_player_sprite.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_player_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_player_sprite.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_player_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST # crisp pixel art
-	_player_sprite.tooltip_text = "Player"
+	_player_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 	_player_sprite_key = _player_sprite_key_from_player()
 	_player_sprite.texture = _player_texture_for_key(_player_sprite_key)
 
-	_battlefield_row.add_child(_player_sprite)
+	_battlefield_canvas.add_child(_player_sprite)
 
-	
-	# Spacer to push enemies to the right.
-	var spacer := Control.new()
-	spacer.name = "BattlefieldSpacer"
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.size_flags_stretch_ratio = 1.5
-	_battlefield_row.add_child(spacer)
-
-
-	# Enemy squares grid
-	_enemies_grid = GridContainer.new()
-	_enemies_grid.columns = 7
-	_enemies_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	#_enemies_grid.size_flags_stretch_ratio = 1.0
-	_enemies_grid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_enemies_grid.add_theme_constant_override("h_separation", 6)
-	_enemies_grid.add_theme_constant_override("v_separation", 6)
-	_battlefield_row.add_child(_enemies_grid)
-
-	# Insert just above the skills row for a "under combat log" feel.
+	# Insert just above the skills row
 	var insert_before: int = get_child_count()
 	if combat_log != null:
 		insert_before = combat_log.get_index() + 4
@@ -526,37 +540,33 @@ func _ensure_battlefield_ui() -> void:
 	move_child(_battlefield_row, insert_before)
 
 func _rebuild_enemy_squares(count: int) -> void:
-	for c in _enemies_grid.get_children():
-		c.queue_free()
+	# Clear existing enemy cells
+	for c in _enemy_squares:
+		if is_instance_valid(c):
+			c.queue_free()
 	_enemy_squares.clear()
 	_enemy_prev_alive.clear()
-	
+
 	if _enemy_textures.is_empty():
 		_load_enemy_textures()
-		
+
 	var wave: int = int(Game.battle_state.get("wave", 1))
 	var is_boss: bool = (wave == Catalog.BATTLE_WAVES_PER_STAGE)
 	var scale_mult: float = (BOSS_SPR_SCALE_MULT if is_boss else 1.0)
-	
-	var sprite_size = (Vector2(132 , 132) if is_boss else Vector2(92, 92))
-	
+	var sprite_size: Vector2 = (Vector2(132, 132) if is_boss else Vector2(92, 92))
 
 	for i in range(count):
-		# Cell holds HP bar + sprite
 		var cell := VBoxContainer.new()
 		cell.name = "EnemyCell_%d" % i
-		cell.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		cell.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		cell.add_theme_constant_override("separation", 2)
+		cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-		# --- HP bar (background + fill) ---
+		# HP bar
 		var hp_bar := Control.new()
 		hp_bar.name = "HPBar"
 		hp_bar.custom_minimum_size = Vector2(48, 10)
 		if is_boss:
 			hp_bar.custom_minimum_size.x *= scale_mult
-		hp_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		hp_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 		var bg := ColorRect.new()
 		bg.name = "BG"
@@ -569,13 +579,13 @@ func _rebuild_enemy_squares(count: int) -> void:
 		fg.name = "FG"
 		fg.color = Color(0.2, 0.9, 0.3, 1.0)
 		fg.anchor_bottom = 1.0
-		fg.anchor_right = 0.0 # we drive width via offset_right
+		fg.anchor_right = 0.0
 		fg.offset_right = hp_bar.custom_minimum_size.x
 		hp_bar.add_child(fg)
 
 		cell.add_child(hp_bar)
 
-		# --- Enemy sprite ---
+		# Sprite
 		var spr := TextureRect.new()
 		spr.name = "Sprite"
 		spr.texture = _enemy_textures.pick_random()
@@ -583,12 +593,12 @@ func _rebuild_enemy_squares(count: int) -> void:
 		spr.custom_minimum_size = sprite_size
 		spr.size = sprite_size
 		spr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		spr.modulate = Color(1, 1, 1, 1)
-		spr.self_modulate = Color(1, 1, 1, 1)
-
+		spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		cell.add_child(spr)
 
-		_enemies_grid.add_child(cell)
+		# Add to canvas (IMPORTANT)
+		_battlefield_canvas.add_child(cell)
+
 		_enemy_squares.append(cell)
 		_enemy_prev_alive.append(true)
 
@@ -622,6 +632,12 @@ func _apply_battlefield_ui() -> void:
 		_rebuild_enemy_squares(enemies.size())
 	
 	_sync_enemy_sprites(enemies, -1)
+	_layout_battlefield(enemies.size())
+
+	
+	# Apply positions (this is where the x_norm -> x_px “one-liner” belongs)
+	#_apply_enemy_positions(enemies)
+
 
 	# Update colors to reflect alive/target; alpha reflects HP %.
 	for i in range(_enemy_squares.size()):
@@ -634,10 +650,6 @@ func _apply_battlefield_ui() -> void:
 		var pct: float = clamp(hp / hm, 0.0, 1.0)
 		var alive: bool = bool(e.get("alive", hp > 0.0))
 		var is_target: bool = bool(e.get("is_target", false))
-
-
-		# HP % as transparency cue (pure placeholder)
-		#rect.modulate.a = 0.30 + 0.70 * pct
 
 func _reposition_task_panel() -> void:
 	_task_reposition_queued = false
@@ -874,3 +886,109 @@ func _player_texture_for_key(k: String) -> Texture2D:
 		"archer": return PLAYER_TEX_ARCHER
 		"mage": return PLAYER_TEX_MAGE
 		_: return PLAYER_TEX_WARRIOR
+
+func _current_layout_key(enemy_count: int) -> String:
+	var diff: String = String(Game.battle_state.get("difficulty", "Easy"))
+	var lvl: int = int(Game.battle_state.get("level", 1))
+	var stg: int = int(Game.battle_state.get("stage", 1))
+	var wav: int = int(Game.battle_state.get("wave", 1))
+	var boss: int = (1 if bool(Game.battle_runtime.get("is_boss", false)) else 0)
+	return "%s|%d|%d|%d|%d|%d" % [diff, lvl, stg, wav, enemy_count, boss]
+
+func _ensure_enemy_jitter(enemy_count: int) -> void:
+	var key := _current_layout_key(enemy_count)
+
+	# New layout context (new wave/stage/etc.) => restart walk-in.
+	if key != _enemy_layout_key:
+		_enemy_enter_t0_ms = Time.get_ticks_msec()
+		for c in _enemy_squares:
+			if is_instance_valid(c) and c.has_meta("arrived"):
+				c.remove_meta("arrived")
+
+	if key == _enemy_layout_key and _enemy_jitter.size() == enemy_count:
+		return
+
+	_enemy_layout_key = key
+	_enemy_jitter.resize(enemy_count)
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = abs(key.hash())
+
+	for i in range(enemy_count):
+		var jx := rng.randf_range(-ENEMY_JITTER_X, ENEMY_JITTER_X)
+		var jy := rng.randf_range(-ENEMY_JITTER_Y, ENEMY_JITTER_Y)
+		_enemy_jitter[i] = Vector2(jx, jy)
+
+func _layout_battlefield(enemy_count: int) -> void:
+	if _battlefield_canvas == null:
+		return
+
+	var cs := _battlefield_canvas.get_rect().size
+	if cs.x <= 10.0 or cs.y <= 10.0:
+		return
+
+	var ground_y := cs.y - PLAYER_GROUND_PAD
+
+	# --- Player ---
+	var player_center_x: float = cs.x * PLAYER_X_FRAC
+	if _player_sprite != null:
+		var psz := _player_sprite.custom_minimum_size
+		var px := player_center_x - (psz.x * 0.5)
+		var py := ground_y - psz.y
+		var ppos := Vector2(clampf(px, 0.0, cs.x - psz.x), clampf(py, 0.0, cs.y - psz.y))
+		_player_sprite.position = ppos
+		player_center_x = ppos.x + (psz.x * 0.5)
+
+	# --- Enemies pack (stagger + jitter) ---
+	_ensure_enemy_jitter(enemy_count)
+
+	# Pack center: closer to player, but never closer than ENEMY_MIN_GAP_PX
+	var pack_center_x := cs.x * ENEMY_PACK_X_FRAC
+	pack_center_x = maxf(pack_center_x, player_center_x + ENEMY_MIN_GAP_PX)
+
+	for i in range(mini(enemy_count, _enemy_squares.size())):
+		var cell := _enemy_squares[i]
+		if cell == null:
+			continue
+
+		var ms := cell.get_combined_minimum_size()
+		if ms == Vector2.ZERO:
+			ms = Vector2(96, 110)
+
+		var col := i % ENEMY_COLS
+		var row := i / ENEMY_COLS
+
+		var base_x := pack_center_x + (float(col) - float(ENEMY_COLS - 1) * 0.5) * ENEMY_X_SPACING
+		var base_y := (ground_y - ms.y) - float(row) * ENEMY_Y_SPACING
+
+		var pos := Vector2(base_x - ms.x * 0.5, base_y) + _enemy_jitter[i]
+
+				# Keep on-screen
+		pos.x = clampf(pos.x, 0.0, cs.x - ms.x)
+		pos.y = clampf(pos.y, 0.0, cs.y - ms.y)
+
+		# --- Time-based walk-in (staggered) ---
+		var elapsed := float(Time.get_ticks_msec() - _enemy_enter_t0_ms) / 1000.0
+		var delay := float(i) * ENEMY_ENTER_STAGGER_SEC
+
+		# t goes 0->1 over ENEMY_ENTER_DURATION_SEC, starting after 'delay'
+		var t := clampf((elapsed - delay) / ENEMY_ENTER_DURATION_SEC, 0.0, 1.0)
+
+		# Smoothstep easing (gentler, more "walk" than linear)
+		t = t * t * (3.0 - 2.0 * t)
+
+		# Off-screen start X (slightly staggered so they don't all emerge from exact same point)
+		var start_x := cs.x + ENEMY_SPAWN_OFFSCREEN_PAD_PX + float(i) * ENEMY_SPAWN_STAGGER_PX
+
+		# During entrance, force X from offscreen -> target; keep Y at target (no vertical sliding)
+		if t < 1.0:
+			var x := lerpf(start_x, pos.x, t)
+			cell.position = Vector2(x, pos.y)
+			cell.set_meta("arrived", false)
+		else:
+			# Arrived: snap once, then gently follow in case layout changes (resize, etc.)
+			if not cell.has_meta("arrived") or not bool(cell.get_meta("arrived")):
+				cell.position = pos
+				cell.set_meta("arrived", true)
+			else:
+				cell.position = cell.position.lerp(pos, ENEMY_FOLLOW_LERP)

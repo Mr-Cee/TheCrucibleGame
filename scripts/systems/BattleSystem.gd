@@ -84,6 +84,18 @@ var _e_def: float = 0.0
 var _e_aps: float = 0.8
 
 #---------------------------------------------------------------------------------------------------
+# Enemy approach / positioning (for visuals + attack gating)
+#---------------------------------------------------------------------------------------------------
+# Normalized X coordinates (0 = far left of battle viewport, 1 = far right).
+# UI can map to pixels: x_px = x_norm * battle_viewport_width.
+const ENEMY_SPAWN_X_NORM: float = 1.25      # start off-screen to the right
+const ENEMY_STOP_X_NORM: float = 0.70       # where enemies stop to attack (gap from player)
+const ENEMY_WALK_SPEED_NORM: float = 0.55   # normalized units per second
+const ENEMY_SPAWN_STAGGER_X_NORM: float = 0.06
+const ENEMY_REACH_EPS: float = 0.002
+
+
+#---------------------------------------------------------------------------------------------------
 # Multi-enemy waves (placeholder visuals support)
 #---------------------------------------------------------------------------------------------------
 const WAVE_MIN_ENEMIES: int = 4
@@ -253,8 +265,13 @@ func get_enemies_snapshot() -> Array[Dictionary]:
 			"hp_max": hm,
 			"alive": hp > 0.0,
 			"is_target": i == _target_enemy_idx,
+
+			# New: approach position and whether this unit can attack
+			"x": float(e.get("x", ENEMY_STOP_X_NORM)),
+			"in_range": bool(e.get("in_range", false)),
 		})
 	return out
+
 
 func get_target_enemy_index() -> int:
 	return _target_enemy_idx
@@ -577,6 +594,9 @@ func _enemy_aps_mult() -> float:
 func _enemy_vuln_mult() -> float:
 	return float(battle_runtime.get("enemy_vuln_mult", 1.0))
 
+func _enemy_move_mult() -> float:
+	return float(battle_runtime.get("enemy_move_mult", 1.0))
+
 func _player_atk_mult() -> float:
 	return float(battle_runtime.get("player_atk_mult", 1.0))
 
@@ -629,6 +649,10 @@ func _reset_target_enemy_effects() -> void:
 	battle_runtime["enemy_aps_time"] = 0.0
 	battle_runtime["enemy_vuln_mult"] = 1.0
 	battle_runtime["enemy_vuln_time"] = 0.0
+	
+	# Target-scoped movement modifiers
+	battle_runtime["enemy_move_mult"] = 1.0
+	battle_runtime["enemy_move_time"] = 0.0
 
 func _apply_damage_to_enemy(idx: int, amount: float) -> float:
 	if idx < 0 or idx >= _enemies.size() or amount <= 0.0:
@@ -775,6 +799,10 @@ func _battle_reset_effects() -> void:
 	battle_runtime["enemy_aps_time"] = 0.0
 	battle_runtime["enemy_vuln_mult"] = 1.0
 	battle_runtime["enemy_vuln_time"] = 0.0
+	
+	# Enemy movement (target-scoped)
+	battle_runtime["enemy_move_mult"] = 1.0
+	battle_runtime["enemy_move_time"] = 0.0
 
 func _battle_tick_effects(dt: float) -> void:
 	# Timers down, reset multipliers when expired
@@ -788,6 +816,9 @@ func _battle_tick_effects(dt: float) -> void:
 	_tick_timer_reset_mult("enemy_def_time", "enemy_def_mult", 1.0, dt)
 	_tick_timer_reset_mult("enemy_aps_time", "enemy_aps_mult", 1.0, dt)
 	_tick_timer_reset_mult("enemy_vuln_time", "enemy_vuln_mult", 1.0, dt)
+	
+	_tick_timer_reset_mult("enemy_move_time", "enemy_move_mult", 1.0, dt)
+
 
 	# Stun (target-scoped)
 	if float(battle_runtime.get("enemy_stun_time", 0.0)) > 0.0:
@@ -866,6 +897,8 @@ func _battle_process(delta: float) -> void:
 
 	_ensure_valid_target()
 	_skills_tick(dt)
+	_battle_tick_enemy_movement(dt)
+
 
 	# Accumulate real-time for aggregation flush
 	_agg_flush_accum += delta
@@ -888,13 +921,17 @@ func _battle_process(delta: float) -> void:
 		var e: Dictionary = _enemies[i]
 		if float(e.get("hp", 0.0)) <= 0.0:
 			continue
+
+		# Cannot attack until they have reached the stop point.
+		if not bool(e.get("in_range", false)):
+			continue
+
 		var t: float = float(e.get("atk_timer", 0.0)) - dt
 		while t <= 0.0:
 			_battle_enemy_attack_from(i)
 			if float(battle_runtime.get("player_hp", 0.0)) <= 0.0:
 				_battle_on_player_defeated()
 				return
-			# roll next timer (apply slow/haste only for target)
 			var attacker_is_target := (i == _target_enemy_idx)
 			t += _roll_enemy_attack_interval(is_boss, attacker_is_target)
 		e["atk_timer"] = t
@@ -1458,12 +1495,17 @@ func _battle_spawn_enemy(reset_hp: bool) -> void:
 		var hpv: float = max(1.0, float(hp_parts[i]))
 		var atkv: float = max(1.0, float(atk_parts[i]))
 		var t0: float = ( _roll_enemy_attack_interval(true, true) if is_boss else _randf_range(0.15, mean_interval) )
+		var x0: float = ENEMY_SPAWN_X_NORM + float(i) * ENEMY_SPAWN_STAGGER_X_NORM
 
 		var unit: Dictionary = {
 			"hp_max": hpv,
 			"hp": (hpv if reset_hp else hpv),
 			"atk": atkv,
 			"atk_timer": t0,
+			
+			# Approach state
+			"x": x0,
+			"in_range": false,
 		}
 
 		# Inject advanced stats (boss-only starting at Void I)
@@ -1515,12 +1557,56 @@ func _battle_spawn_dungeon_enemy(reset_hp: bool) -> void:
 		"hp": (hp if reset_hp else hp),
 		"atk": max(1.0, atk),
 		"atk_timer": _roll_enemy_attack_interval(true, true),
+		
+		# Approach state
+		"x": ENEMY_SPAWN_X_NORM,
+		"in_range": false,
 	})
 
 	_target_enemy_idx = 0
 	_ensure_valid_target()
 	_reset_target_enemy_effects()
 	__refresh_enemy_totals()
+
+func _battle_tick_enemy_movement(dt: float) -> void:
+	if _enemies.is_empty():
+		return
+
+	for i in range(_enemies.size()):
+		var e: Dictionary = _enemies[i]
+		if float(e.get("hp", 0.0)) <= 0.0:
+			continue
+
+		if bool(e.get("in_range", false)):
+			continue
+
+		var x: float = float(e.get("x", ENEMY_SPAWN_X_NORM))
+		var speed: float = ENEMY_WALK_SPEED_NORM
+
+		# Only the current target can be affected by your target-scoped CC/move modifiers.
+		# (If you later want AoE slows, you can apply per-enemy move_mult in the unit dict.)
+		if i == _target_enemy_idx:
+			# If stunned, stop movement.
+			if float(battle_runtime.get("enemy_stun_time", 0.0)) > 0.0:
+				speed = 0.0
+			else:
+				speed *= _enemy_move_mult()
+
+		x -= speed * dt
+
+		# Reached melee stop point
+		if x <= ENEMY_STOP_X_NORM + ENEMY_REACH_EPS:
+			x = ENEMY_STOP_X_NORM
+			e["in_range"] = true
+
+			# Start the enemy's attack cycle only after they arrive.
+			# Add +dt so the attack loop (which subtracts dt this tick) doesn't allow an instant hit on arrival.
+			var is_boss: bool = bool(battle_runtime.get("is_boss", false))
+			var attacker_is_target := (i == _target_enemy_idx)
+			e["atk_timer"] = _roll_enemy_attack_interval(is_boss, attacker_is_target) + dt
+
+		e["x"] = x
+		_enemies[i] = e
 
 func _battle_recompute_player_combat() -> void:
 	if player == null:
