@@ -29,6 +29,19 @@ var battle_runtime: Dictionary = {
 	"status_text": "",
 }
 
+# After failing Wave 5, we enter endless packs until the user chooses to Challenge again.
+var _endless_active: bool = false
+
+# Challenge button should appear after at least one Wave 5 failure this stage position.
+var _wave5_challenge_available: bool = false
+
+# If true, we’re in the defeat pause specifically for a Wave 5 failure, and will transition to endless.
+var _boss_fail_to_endless_pending: bool = false
+
+# battle_runtime["endless_mode"] = true/false
+# battle_runtime["boss_waiting"] = true/false   (only when button should be shown and we are waiting)
+
+
 var _battle_inited: bool = false
 var _p_atk_accum: float = 0.0
 var _e_atk_accum: float = 0.0
@@ -110,6 +123,8 @@ var _target_enemy_idx: int = 0
 
 var _defeat_pause_remaining: float = 0.0
 const DEFEAT_PAUSE_SECONDS: float = 1.5
+
+# ============== Log ===========================================
 
 const COMBAT_LOG_MAX_LINES: int = 120
 var combat_log: Array[String] = []
@@ -881,10 +896,15 @@ func _battle_process(delta: float) -> void:
 	
 	# If defeated, freeze battle briefly so UI can show 0 HP.
 	if _defeat_pause_remaining > 0.0:
-		_defeat_pause_remaining -= delta  # unscaled real-time
+		_defeat_pause_remaining -= delta
 		if _defeat_pause_remaining <= 0.0:
-			_finish_defeat_reset()
+			if _boss_fail_to_endless_pending:
+				_boss_fail_to_endless_pending = false
+				_enter_endless_mode()
+			else:
+				_finish_defeat_reset()
 		return
+
 
 	var dt: float = delta * _battle_speed_multiplier()
 
@@ -1309,6 +1329,17 @@ func _enemy_vuln_mult_for_idx(idx: int) -> float:
 	return _enemy_vuln_mult() if idx == _target_enemy_idx else 1.0
 
 func _battle_on_enemy_defeated() -> void:
+		# Endless mode: no rewards, no progression, just spawn the next pack.
+	if is_endless_mode():
+		# Keep the usual “between waves” heal behavior (matches your current progression behavior).
+		_battle_recompute_player_combat()
+		battle_runtime["player_hp_max"] = _p_hp_max
+		battle_runtime["player_hp"] = _p_hp_max
+
+		_spawn_endless_pack(true)
+		battle_changed.emit()
+		return
+
 	if _dungeon_active:
 		var ds: DungeonSystem = (game.get("dungeon_system") as DungeonSystem)
 		if ds == null:
@@ -1395,6 +1426,10 @@ func _battle_on_enemy_defeated() -> void:
 
 	# Clear combat log when finishing boss wave and moving to next stage
 	if is_boss:
+		_endless_active = false
+		_wave5_challenge_available = false
+		battle_runtime["endless_mode"] = false
+		battle_runtime["boss_waiting"] = false
 		clear_combat_log()
 		# (Optional) add a header line so the new stage isn’t “silent”
 		log_combat(
@@ -1428,6 +1463,22 @@ func _battle_on_player_defeated() -> void:
 			game.emit_signal("inventory_event", "Dungeon failed.")
 
 		_finish_dungeon(false, {})
+		return
+		
+	# Wave 5 boss failure => after defeat pause, transition into endless packs.
+	if (not _dungeon_active) and int(battle_state.get("wave", 1)) == Catalog.BATTLE_WAVES_PER_STAGE:
+		battle_runtime["player_hp"] = 0.0
+		battle_runtime["status_text"] = "Defeated!"
+		if combat_log_compact_effective():
+			_combat_log_flush(true)
+		log_combat("system", "defeat", "[color=#FF4444][b]Defeated![/b][/color]")
+
+		_p_atk_accum = 0.0
+		_e_atk_accum = 0.0
+
+		_boss_fail_to_endless_pending = true
+		_defeat_pause_remaining = DEFEAT_PAUSE_SECONDS
+		battle_changed.emit()
 		return
 		
 	# Set HP to 0 and pause so UI can show defeat.
@@ -2021,3 +2072,138 @@ func _finish_dungeon(success: bool, reward: Dictionary) -> void:
 			game.emit_signal("player_changed")
 		if game.has_signal("dungeon_finished"):
 			game.emit_signal("dungeon_finished", did, attempted_level, success, reward)
+
+func _stage_key() -> String:
+	# Adapt to however you represent difficulty/chapter/stage in your project
+	# Examples:
+	# return "%s:%d-%d" % [Game.difficulty_id, Game.chapter, Game.stage]
+	# return "%s:%s" % [Game.difficulty_name, Game.current_stage_id]
+	return "%s:%d-%d" % [Game.difficulty_name, Game.chapter, Game.stage]
+
+func _is_wave5() -> bool:
+	return (not _dungeon_active) and int(battle_state.get("wave", 1)) == Catalog.BATTLE_WAVES_PER_STAGE
+
+func is_endless_mode() -> bool:
+	return _endless_active and (not _dungeon_active)
+
+func can_challenge_wave5() -> bool:
+	# Button shows only after at least one boss failure, while we are sitting in endless mode.
+	return (not _dungeon_active) and _wave5_challenge_available and _endless_active and _is_wave5()
+
+func challenge_wave5() -> void:
+	# Starts an actual Wave 5 boss attempt.
+	if not can_challenge_wave5():
+		return
+
+	_endless_active = false
+	battle_runtime["endless_mode"] = false
+	battle_runtime["boss_waiting"] = false
+	battle_runtime["status_text"] = ""
+
+	# Reset combat pacing and effects for a clean attempt.
+	_p_atk_accum = 0.0
+	_e_atk_accum = 0.0
+	_defeat_pause_remaining = 0.0
+
+	clear_combat_log()
+	_skills_init_runtime()
+	_battle_reset_effects()
+	_battle_recompute_player_combat()
+
+	battle_runtime["player_hp_max"] = _p_hp_max
+	battle_runtime["player_hp"] = _p_hp_max
+
+	# Wave is still 5, so your normal spawn will be the boss.
+	_battle_spawn_enemy(true)
+	battle_changed.emit()
+
+func _spawn_endless_pack(reset_hp: bool) -> void:
+	# Endless uses the current diff/level/stage, but spawns a non-boss pack.
+	# I recommend using Wave 4 scaling for the pack (boss attempts remain Wave 5).
+	var diff: String = String(battle_state.get("difficulty", "Easy"))
+	var lvl: int = int(battle_state.get("level", 1))
+	var stg: int = int(battle_state.get("stage", 1))
+
+	var pack_wave: int = max(1, Catalog.BATTLE_WAVES_PER_STAGE - 1) # wave 4
+	var is_boss := false
+
+	battle_runtime["is_boss"] = false
+	battle_runtime["enemy_name"] = ""
+	battle_runtime["enemy_sprite_path"] = ""
+	battle_runtime["status_text"] = "Endless"
+
+	# Use the same Catalog multipliers path, just non-boss.
+	var adv: Dictionary = Catalog.battle_enemy_advanced_stats(diff, lvl, stg, pack_wave, is_boss)
+	var m: Dictionary = Catalog.battle_enemy_multipliers(diff, lvl, stg, pack_wave, is_boss)
+
+	var total_hp: float = Catalog.ENEMY_BASE_HP * float(m["hp"])
+	var base_atk: float = Catalog.ENEMY_BASE_ATK * float(m["atk"])
+	var def: float = Catalog.ENEMY_BASE_DEF * float(m["def"])
+
+	battle_runtime["enemy_hp_max"] = total_hp
+	if reset_hp:
+		battle_runtime["enemy_hp"] = total_hp
+
+	_e_def = max(0.0, def)
+	_e_atk = max(1.0, base_atk)
+
+	# Build a normal multi-enemy pack
+	var count: int = (RNG as RNGService).randi_range(WAVE_MIN_ENEMIES, WAVE_MAX_ENEMIES)
+	_enemies.clear()
+
+	var hp_parts: Array[float] = _split_total(total_hp, count)
+
+	var legacy_dps: float = base_atk * _e_aps
+	var mean_interval: float = (ENEMY_ATK_INTERVAL_MIN + ENEMY_ATK_INTERVAL_MAX) * 0.5
+	var sum_per_hit: float = legacy_dps * mean_interval
+	var atk_parts: Array[float] = _split_total(sum_per_hit, count)
+
+	for i in range(count):
+		var hpv: float = max(1.0, float(hp_parts[i]))
+		var atkv: float = max(1.0, float(atk_parts[i]))
+		var t0: float = _randf_range(0.15, mean_interval)
+		var x0: float = ENEMY_SPAWN_X_NORM + float(i) * ENEMY_SPAWN_STAGGER_X_NORM
+
+		var unit: Dictionary = {
+			"hp_max": hpv,
+			"hp": (hpv if reset_hp else hpv),
+			"atk": atkv,
+			"atk_timer": t0,
+			"x": x0,
+			"in_range": false,
+		}
+
+		# If adv stats are boss-only, this is likely empty; but safe to merge.
+		for k in adv.keys():
+			unit[k] = adv[k]
+
+		_enemies.append(unit)
+
+	_target_enemy_idx = 0
+	_ensure_valid_target()
+	_reset_target_enemy_effects()
+	__refresh_enemy_totals()
+
+func _enter_endless_mode() -> void:
+	_endless_active = true
+	_wave5_challenge_available = true
+
+	battle_runtime["endless_mode"] = true
+	battle_runtime["boss_waiting"] = true
+	battle_runtime["status_text"] = "Endless — press Challenge to retry boss."
+
+	# Respawn player and begin endless pack combat.
+	_battle_recompute_player_combat()
+	battle_runtime["player_hp_max"] = _p_hp_max
+	battle_runtime["player_hp"] = _p_hp_max
+
+	clear_combat_log()
+	_skills_init_runtime()
+	_battle_reset_effects()
+
+	_p_atk_accum = 0.0
+	_e_atk_accum = 0.0
+	_defeat_pause_remaining = 0.0
+
+	_spawn_endless_pack(true)
+	battle_changed.emit()

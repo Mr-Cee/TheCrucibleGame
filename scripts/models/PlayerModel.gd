@@ -31,6 +31,9 @@ signal leveled_up(levels_gained: int)
 }
 @export var deferred_gear: Array[Dictionary] = []
 
+@export var failed_wave5_boss: Dictionary = {} # stage_key -> true
+
+
 # =======================
 # Combat Power (CP) tuning
 # =======================
@@ -148,7 +151,7 @@ func to_dict() -> Dictionary:
 		"dungeon_levels": dungeon_levels,
 		"dungeon_daily_reset_day_key": dungeon_daily_reset_day_key,
 		"dungeon_last_reset_day": dungeon_last_reset_day,
-
+		"failed_wave5_boss": failed_wave5_boss,
 	}
 
 static func from_dict(d: Dictionary) -> PlayerModel:
@@ -164,6 +167,13 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.class_def_id = String(d.get("class_def_id", ""))
 	
 	p.skill_auto = bool(d.get("skill_auto", true))
+	
+	var fwb: Variant = d.get("failed_wave5_boss", {})
+	p.failed_wave5_boss = {}
+	if typeof(fwb) == TYPE_DICTIONARY:
+		# Duplicate to avoid sharing the same Dictionary reference from the save blob.
+		p.failed_wave5_boss = (fwb as Dictionary).duplicate(true)
+
 
 	var eav: Variant = d.get("equipped_active_skills", [])
 	p.equipped_active_skills = []
@@ -468,25 +478,6 @@ func add_xp(amount: int) -> int:
 func battlepass_active(now_unix: int) -> bool:
 	return battlepass_expires_unix > now_unix
 
-#func ensure_class_and_skills_initialized() -> void:
-	#if int(class_id) < 0:
-		#return
-	##call this after loading or creating a new player
-	#if class_def_id == "":
-		#var base_def: ClassDef = ClassCatalog.base_def_for_class_id(class_id)
-		#if base_def != null:
-			#class_def_id = base_def.id
-			#
-	##seed starter skills if missing (new save or older save)
-	#if skill_levels.is_empty():
-		#skill_levels = SkillCatalog.starting_skill_levels_for_class(class_id)
-		#
-	#if equipped_active_skills.is_empty():
-		#equipped_active_skills = SkillCatalog.starting_active_loadout_for_class(class_id)
-		#
-	#if equipped_passive_skills.is_empty():
-		#equipped_passive_skills = SkillCatalog.starting_passives_for_class(class_id)
-
 func ensure_active_skills_initialized() -> void:
 	# Equipped slots: always 5, empty by default
 	if equipped_active_skills == null:
@@ -691,7 +682,6 @@ func add_skill_copies(skill_id: String, amount: int = 1) -> void:
 
 	skill_progress[skill_id] = prog
 
-
 func can_upgrade_skill(skill_id: String) -> bool:
 	ensure_active_skills_initialized()
 	if SkillCatalog.get_def(skill_id) == null:
@@ -764,3 +754,12 @@ func add_task_reward(kind: int, amount: int) -> void:
 			skill_tickets += amount
 		RewardDef.Kind.CRYSTALS:
 			crystals += amount
+
+func has_failed_wave5_boss(stage_key: String) -> bool:
+	return bool(failed_wave5_boss.get(stage_key, false))
+
+func set_failed_wave5_boss(stage_key: String, failed: bool) -> void:
+	if failed:
+		failed_wave5_boss[stage_key] = true
+	else:
+		failed_wave5_boss.erase(stage_key)
