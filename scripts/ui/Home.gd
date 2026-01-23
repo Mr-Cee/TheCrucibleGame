@@ -21,17 +21,6 @@ extends Control
 #Crucible Upgrade Popup
 @onready var crucible_upgrade_popup: Window = $CrucibleUpgradePopup
 
-
-# Compare Popup
-@onready var compare_popup: Window = $ComparePopup
-@onready var new_item_label: RichTextLabel = $ComparePopup/RootVBox/CardsRow/LeftCol/NewCard/Margin/NewItemLabel
-@onready var equipped_item_label: RichTextLabel = $ComparePopup/RootVBox/CardsRow/RightCol/EquippedCard/Margin/EquippedItemLabel
-
-@onready var equip_button: Button = $ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow/EquipButton
-@onready var sell_button: Button = $ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow/SellButton
-@onready var close_button: Button = $ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow/CloseButton
-
-
 @onready var gear_strip: HBoxContainer = $RootMargin/RootVBox/GearStrip
 
 @onready var auto_popup: Window = $AutoPopup
@@ -68,7 +57,7 @@ signal compare_resolved
 
 
 var _crucible := CrucibleSystem.new()
-
+var _compare_panel: ComparePanel = null
 enum PopupMode { COMPARE, DETAILS }
 var _popup_mode: int = PopupMode.COMPARE
 var _pending_item: GearItem
@@ -195,9 +184,6 @@ func _refresh_skill_buttons() -> void:
 func _ready() -> void:
 	# Existing connections...
 	Game.inventory_event.connect(_on_inventory_event)
-	equip_button.pressed.connect(_on_equip_pressed)
-	sell_button.pressed.connect(_on_sell_pressed)
-	close_button.pressed.connect(_on_close_pressed)
 	skills_button.pressed.connect(_on_skills_pressed)
 	if not dungeons_btn.pressed.is_connected(_on_dungeons_pressed):
 		dungeons_btn.pressed.connect(_on_dungeons_pressed)
@@ -225,8 +211,6 @@ func _ready() -> void:
 	_setup_crucible_art_ui()
 	_build_crucible_click_frames()
 	_set_crucible_button_texture(CRUCIBLE_IDLE_TEX)
-
-	compare_popup.visible = false
 
 	# Connect GearStrip signal (slot clicks)
 	if gear_strip.has_signal("slot_clicked"):
@@ -283,7 +267,6 @@ func _ready() -> void:
 	_cache_hp_bar_styles()
 	_update_hp_bar_visuals()
 
-
 func _process(delta: float) -> void:
 	_hud_ui_accum += delta
 	if _hud_ui_accum < 0.10:
@@ -315,27 +298,12 @@ func show_details(slot_id: int, item: GearItem) -> void:
 	_pending_item = null
 	_equipped_snapshot = item
 
-	new_item_label.bbcode_enabled = true
-	equipped_item_label.bbcode_enabled = true
-
 	var slot_name: String = String(Catalog.GEAR_SLOT_NAMES.get(slot_id, "Slot"))
+	var cp_val: int = _calc_item_cp_for_slot(slot_id, item) if item != null else 0
 
-	# In details mode we show the item on the left and leave "Equipped" blank
-	if item == null:
-		new_item_label.text = "[b]%s:[/b]\n(None)" % slot_name
-		equipped_item_label.text = ""
-		#unequip_button.visible = false
-	else:
-		new_item_label.text = "[b]%s:[/b]\n%s" % [slot_name, item.to_bbcode()]
-		equipped_item_label.text = ""
-		#unequip_button.visible = true
+	_ensure_compare_panel()
+	_compare_panel.configure_details("%s Details" % slot_name, item, cp_val)
 
-	# Buttons: details mode has no equip/sell
-	equip_button.visible = false
-	sell_button.visible = false
-	close_button.visible = true
-
-	compare_popup.popup_centered(Vector2i(520, 420))
 
 func _calc_item_cp_for_slot(slot_id: int, item: GearItem) -> int:
 	if item == null:
@@ -368,9 +336,6 @@ func show_compare(item: GearItem, from_deferred: bool = false) -> void:
 
 	_equipped_snapshot = Game.player.equipped.get(item.slot, null)
 
-	new_item_label.bbcode_enabled = true
-	equipped_item_label.bbcode_enabled = true
-
 	# --- CP calculations (slot contribution) ---
 	var new_cp: int = _calc_item_cp_for_slot(item.slot, item)
 	var eq_cp: int = 0
@@ -388,23 +353,8 @@ func show_compare(item: GearItem, from_deferred: bool = false) -> void:
 	elif _equipped_snapshot != null and delta == 0:
 		cp_line += " [color=#bbbbbb](+0)[/color]"
 
-	# --- Build BBCode text ---
-	new_item_label.text = "[b]New:[/b]\n%s\n%s" % [cp_line, item.to_bbcode()]
-
-	if _equipped_snapshot != null:
-		equipped_item_label.text = "[b]Equipped:[/b]\n[b]CP:[/b] %d\n%s" % [
-			eq_cp,
-			_equipped_snapshot.to_bbcode()
-		]
-	else:
-		equipped_item_label.text = "[b]Equipped:[/b]\n[b]CP:[/b] 0\n(None)"
-
-	# Buttons: compare mode uses equip/sell
-	equip_button.visible = true
-	sell_button.visible = true
-	close_button.visible = true
-
-	compare_popup.popup_centered(Vector2i(520, 420))
+	_ensure_compare_panel()
+	_compare_panel.configure_compare(item, _equipped_snapshot, new_cp, eq_cp, delta)
 
 func _show_compare_and_wait(item: GearItem, from_deferred: bool = false) -> void:
 	# Defer showing compare until no other panels/windows are open.
@@ -413,6 +363,19 @@ func _show_compare_and_wait(item: GearItem, from_deferred: bool = false) -> void
 	show_compare(item, from_deferred)
 	await compare_resolved
 
+func _ensure_compare_panel() -> void:
+	if is_instance_valid(_compare_panel):
+		return
+	_compare_panel = ComparePanel.new()
+	Game.popup_root().add_child(_compare_panel)
+	_compare_panel.equip_pressed.connect(_on_equip_pressed)
+	_compare_panel.sell_pressed.connect(_on_sell_pressed)
+	_compare_panel.close_pressed.connect(_on_close_pressed)
+
+func _close_compare_panel() -> void:
+	if is_instance_valid(_compare_panel):
+		_compare_panel.queue_free()
+	_compare_panel = null
 
 func _on_equip_pressed() -> void:
 	if _pending_item == null:
@@ -432,7 +395,7 @@ func _on_equip_pressed() -> void:
 		return
 
 	# Done
-	compare_popup.visible = false
+	_close_compare_panel()
 	emit_signal("compare_resolved")
 
 func _on_sell_pressed() -> void:
@@ -444,7 +407,7 @@ func _on_sell_pressed() -> void:
 		_pending_item_from_deferred = false
 
 	Game.sell_item(_pending_item)
-	compare_popup.visible = false
+	_close_compare_panel()
 	emit_signal("compare_resolved")
 
 func _on_unequip_pressed() -> void:
@@ -456,7 +419,7 @@ func _on_unequip_pressed() -> void:
 	# Unequip = set slot to null
 	Game.player.equipped[_details_slot_id] = null
 	Game.player_changed.emit()
-	compare_popup.visible = false
+	#compare_popup.visible = false
 
 func _on_close_pressed() -> void:
 	if _pending_item != null:
@@ -468,7 +431,7 @@ func _on_close_pressed() -> void:
 			# Important: stop auto so it doesn't spam the same item
 			_stop_auto_draw()
 
-	compare_popup.visible = false
+	_close_compare_panel()
 	emit_signal("compare_resolved")
 
 func _on_inventory_event(msg: String) -> void:
