@@ -38,7 +38,7 @@ const PATH_ICON_VOUCHER := "res://assets/icons/UI/currency/time_ticket.png" # fa
 # -------------------- Nodes --------------------
 var _shell: PanelContainer
 var _title_lbl: Label
-var _btn_x_top: Button
+#var _btn_x_top: Button
 
 var _gold_lbl: Label
 var _vouchers_lbl: Label
@@ -68,7 +68,6 @@ var _ui_timer: Timer
 
 func _ready() -> void:
 	name = "CrucibleUpgradePanel"
-	#top_level = true
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	offset_left = 0
 	offset_top = 0
@@ -84,6 +83,12 @@ func _ready() -> void:
 	dim.color = COL_DIM
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
+	
+	# Close when clicking outside the panel
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_close()
+	)
 
 	# Shell
 	_shell = PanelContainer.new()
@@ -132,13 +137,6 @@ func _ready() -> void:
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(_title_lbl)
 
-	_btn_x_top = Button.new()
-	_btn_x_top.text = "X"
-	_btn_x_top.custom_minimum_size = Vector2(46, 36)
-	_btn_x_top.pressed.connect(_close)
-	header.add_child(_btn_x_top)
-	_style_action_button(_btn_x_top, COL_BTN_CLOSE_BG, COL_BTN_CLOSE_BR, COL_TEXT_DARK, 18)
-
 	root.add_child(_make_hr())
 
 	# Currency row (gold + vouchers)
@@ -153,11 +151,12 @@ func _ready() -> void:
 
 	var gold_box := _make_icon_stat(_safe_load_tex(PATH_ICON_GOLD), "0")
 	_gold_lbl = gold_box["label"]
-	cur_row.add_child(gold_box["node"])
+	cur_row.add_child(_wrap_currency_chip(gold_box["node"]))
 
 	var v_box := _make_icon_stat(_safe_load_tex(PATH_ICON_VOUCHER), "0")
 	_vouchers_lbl = v_box["label"]
-	cur_row.add_child(v_box["node"])
+	cur_row.add_child(_wrap_currency_chip(v_box["node"]))
+
 
 	# Level row (Current -> Next)
 	var lvl_card := _make_card()
@@ -635,7 +634,7 @@ func _make_icon_stat(icon: Texture2D, value_text: String) -> Dictionary:
 	if icon != null:
 		var tr := TextureRect.new()
 		tr.texture = icon
-		tr.custom_minimum_size = Vector2(26, 26)
+		tr.custom_minimum_size = Vector2(40, 40)
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -733,3 +732,28 @@ func _fmt_compact_number(value: int) -> String:
 		return sign + ("%0.1f%s" % [rounded, SUFFIXES[idx]])
 
 	return sign + str(int(round(n)))
+
+func _wrap_currency_chip(inner: Control) -> PanelContainer:
+	var pc := PanelContainer.new()
+	pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pc.custom_minimum_size = Vector2(0, 44)
+
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1, 0.22)  # subtle light fill
+	sb.set_border_width_all(2)
+	sb.border_color = COL_CARD_BORDER
+	sb.corner_radius_top_left = 12
+	sb.corner_radius_top_right = 12
+	sb.corner_radius_bottom_left = 12
+	sb.corner_radius_bottom_right = 12
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	pc.add_theme_stylebox_override("panel", sb)
+
+	# inner is your icon+label HBoxContainer
+	inner.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pc.add_child(inner)
+
+	return pc
