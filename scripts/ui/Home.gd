@@ -19,7 +19,7 @@ extends Control
 @onready var filter_button: Button = $RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons/FilterButton
 
 #Crucible Upgrade Popup
-@onready var crucible_upgrade_popup: Window = $CrucibleUpgradePopup
+#@onready var crucible_upgrade_popup: Window = $CrucibleUpgradePopup
 
 @onready var gear_strip: HBoxContainer = $RootMargin/RootVBox/GearStrip
 
@@ -123,6 +123,11 @@ const CRUCIBLE_IDLE_TEX := preload("res://assets/UI/crucible.png")# Currency ico
 const PATH_CURRENCY_GOLD: String = "res://assets/icons/UI/currency/gold.png"
 const PATH_CURRENCY_CRYSTALS: String = "res://assets/icons/UI/currency/crystals.png"
 const PATH_CURRENCY_DIAMONDS: String = "res://assets/icons/UI/currency/diamonds.png"
+const PATH_ICON_OFFLINE_CHEST := "res://assets/icons/UI/misc/offline_rewards.png"
+
+var _offline_chest_btn: TextureButton = null
+var _tex_offline_chest: Texture2D = null
+var _offline_popup: OfflinePopup = null
 
 var _tex_gold: Texture2D = null
 var _tex_crystals: Texture2D = null
@@ -209,6 +214,7 @@ func _ready() -> void:
 	
 	_setup_currency_icons()
 	_setup_crucible_art_ui()
+	_setup_offline_chest_button()
 	_build_crucible_click_frames()
 	_set_crucible_button_texture(CRUCIBLE_IDLE_TEX)
 
@@ -226,8 +232,11 @@ func _ready() -> void:
 	
 	#Crucible Upgrade Popup
 	upgrade_button.pressed.connect(func() -> void:
-		crucible_upgrade_popup.call("popup_and_refresh")
+		var p := CrucibleUpgradePanel.new()
+		Game.popup_root().add_child(p)
+		p.popup_and_refresh()
 	)
+
 
 	auto_popup.visible = false
 	filter_button.toggle_mode = true
@@ -266,6 +275,8 @@ func _ready() -> void:
 	
 	_cache_hp_bar_styles()
 	_update_hp_bar_visuals()
+	
+	call_deferred("_maybe_show_offline_popup")
 
 func _process(delta: float) -> void:
 	_hud_ui_accum += delta
@@ -302,8 +313,7 @@ func show_details(slot_id: int, item: GearItem) -> void:
 	var cp_val: int = _calc_item_cp_for_slot(slot_id, item) if item != null else 0
 
 	_ensure_compare_panel()
-	_compare_panel.configure_details("%s Details" % slot_name, item, cp_val)
-
+	_compare_panel.configure_details("%s Details" % slot_name, item, cp_val, slot_id)
 
 func _calc_item_cp_for_slot(slot_id: int, item: GearItem) -> int:
 	if item == null:
@@ -729,8 +739,6 @@ func _has_blocking_ui_for_compare() -> bool:
 	if is_instance_valid(auto_popup) and auto_popup.visible:
 		return true
 	if is_instance_valid(voucher_popup) and voucher_popup.visible:
-		return true
-	if is_instance_valid(crucible_upgrade_popup) and crucible_upgrade_popup.visible:
 		return true
 	if is_instance_valid(dev_popup) and dev_popup.visible:
 		return true
@@ -1952,3 +1960,126 @@ func _update_hp_bar_visuals() -> void:
 			# If we never cached a fill, remove any override just in case
 			hp_bar.remove_theme_stylebox_override("fill")
 		hp_bar.modulate = _hp_modulate_normal
+
+func _maybe_show_offline_popup() -> void:
+	# If class selection/advancement modal is up, retry shortly.
+	if _class_select_overlay != null:
+		await get_tree().create_timer(0.15).timeout
+		call_deferred("_maybe_show_offline_popup")
+		return
+
+	if not Game.offline_has_pending():
+		_hide_offline_chest_button()
+		return
+
+	_open_offline_popup()
+
+func _setup_offline_chest_button() -> void:
+	if is_instance_valid(_offline_chest_btn):
+		return
+
+	_tex_offline_chest = _safe_load_tex(PATH_ICON_OFFLINE_CHEST)
+
+	_offline_chest_btn = TextureButton.new()
+	_offline_chest_btn.name = "OfflineRewardsChestButton"
+	_offline_chest_btn.texture_normal = _tex_offline_chest
+	_offline_chest_btn.texture_hover = _tex_offline_chest
+	_offline_chest_btn.texture_pressed = _tex_offline_chest
+	_offline_chest_btn.texture_disabled = _tex_offline_chest
+
+	_offline_chest_btn.ignore_texture_size = true
+	_offline_chest_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	_offline_chest_btn.custom_minimum_size = Vector2(72, 72)
+	_offline_chest_btn.visible = false
+	_offline_chest_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	_offline_chest_btn.tooltip_text = "Offline Rewards"
+	_offline_chest_btn.pressed.connect(_on_offline_chest_pressed)
+
+	# Add to Home, but position in global coords so it floats above the crucible cleanly.
+	add_child(_offline_chest_btn)
+	_offline_chest_btn.top_level = true
+	_offline_chest_btn.z_as_relative = false
+	_offline_chest_btn.z_index = 200
+
+	# Keep it in the right spot if the window/UI changes size
+	get_viewport().size_changed.connect(_position_offline_chest_button)
+	if is_instance_valid(crucible_row) and not crucible_row.resized.is_connected(_position_offline_chest_button):
+		crucible_row.resized.connect(_position_offline_chest_button)
+
+	call_deferred("_position_offline_chest_button")
+
+func _position_offline_chest_button() -> void:
+	if not is_instance_valid(_offline_chest_btn):
+		return
+	if not _offline_chest_btn.visible:
+		return
+	if not is_instance_valid(_crucible_art_btn):
+		return
+
+	var gr := _crucible_art_btn.get_global_rect()
+	if gr.size == Vector2.ZERO:
+		call_deferred("_position_offline_chest_button")
+		return
+
+	var chest_size := _offline_chest_btn.custom_minimum_size
+	var center_x := gr.position.x + gr.size.x * 0.5
+
+	# Place it just above the crucible art button
+	var y := gr.position.y - (chest_size.y * 0.65)
+
+	_offline_chest_btn.global_position = Vector2(
+		center_x - chest_size.x * 0.5,
+		y - chest_size.y * 0.5
+	)
+
+func _show_offline_chest_button() -> void:
+	if not Game.offline_has_pending():
+		return
+	_setup_offline_chest_button()
+	_offline_chest_btn.visible = true
+	_position_offline_chest_button()
+
+func _hide_offline_chest_button() -> void:
+	if is_instance_valid(_offline_chest_btn):
+		_offline_chest_btn.visible = false
+
+func _on_offline_chest_pressed() -> void:
+	_open_offline_popup()
+
+func _open_offline_popup() -> void:
+	if is_instance_valid(_offline_popup):
+		return
+
+	if not Game.offline_has_pending():
+		_hide_offline_chest_button()
+		return
+
+	# Hide chest while popup is open
+	_hide_offline_chest_button()
+
+	var p := OfflinePopup.new()
+	p.setup(Game.offline_get_pending())
+	Game.popup_root().add_child(p)
+	_offline_popup = p
+
+	# If they click X: show chest so they can reopen later
+	if not p.dismissed.is_connected(_on_offline_popup_dismissed):
+		p.dismissed.connect(_on_offline_popup_dismissed)
+
+	# If they claim: make sure chest is gone
+	if not p.claimed.is_connected(_on_offline_popup_claimed):
+		p.claimed.connect(_on_offline_popup_claimed)
+
+	# Clear reference when the popup is freed
+	p.tree_exited.connect(func() -> void:
+		if _offline_popup == p:
+			_offline_popup = null
+	)
+
+func _on_offline_popup_dismissed() -> void:
+	# Player chose not to claim yet
+	_show_offline_chest_button()
+
+func _on_offline_popup_claimed() -> void:
+	# Rewards were consumed; no chest needed
+	_hide_offline_chest_button()

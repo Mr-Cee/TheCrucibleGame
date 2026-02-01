@@ -111,13 +111,16 @@ func load_or_new() -> void:
 	else:
 		Game.reset_battle_state()
 
-	# Apply offline rewards BEFORE announcing player_changed (so UI shows the updated values)
-	var summary: Dictionary = Game.apply_offline_rewards_on_load()
+# Queue offline rewards BEFORE announcing player_changed (so UI shows the updated values)
+	var summary: Dictionary = Game.offline_capture_pending_on_load(false)
+
+	# Now announce the loaded player (and pending, if any)
 	Game.player_changed.emit()
 
-	# Persist immediately so offline rewards can't be re-applied on next launch
-	if bool(summary.get("applied", false)):
-		save_now()
+	# Persist immediately so pending + last_active_unix are saved
+	save_now()
+
+
 
 	_log("Loaded save OK.")
 

@@ -34,6 +34,12 @@ signal leveled_up(levels_gained: int)
 @export var failed_wave5_boss: Dictionary = {} # stage_key -> true
 
 
+# ============= Offline Rewards ================
+var offline_pending: Dictionary = {}   # unclaimed rewards bundle (base + bonus)
+var offline_bonus_day_id: int = 0      # GMT day id (unix/86400)
+var offline_bonus_uses: int = 0        # 0..3 per GMT day
+
+
 # =======================
 # Combat Power (CP) tuning
 # =======================
@@ -143,7 +149,6 @@ func to_dict() -> Dictionary:
 		"crucible_upgrade_target_level": crucible_upgrade_target_level,
 		"crucible_upgrade_finish_unix": crucible_upgrade_finish_unix,
 		"last_active_unix": last_active_unix,
-		#Unlocks
 		"premium_offline_unlocked": premium_offline_unlocked,
 		"battlepass_expires_unix": battlepass_expires_unix,
 		"task_state": task_state,
@@ -152,6 +157,9 @@ func to_dict() -> Dictionary:
 		"dungeon_daily_reset_day_key": dungeon_daily_reset_day_key,
 		"dungeon_last_reset_day": dungeon_last_reset_day,
 		"failed_wave5_boss": failed_wave5_boss,
+		"offline_pending": offline_pending,
+		"offline_bonus_day_id": offline_bonus_day_id,
+		"offline_bonus_uses": offline_bonus_uses,
 	}
 
 static func from_dict(d: Dictionary) -> PlayerModel:
@@ -192,8 +200,6 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 
 	p.ensure_active_skills_initialized()
 
-
-	
 	p.crucible_keys = int(d.get("crucible_keys", 0))
 	p.crucible_level = int(d.get("crucible_level", 1))
 	p.crucible_batch = int(d.get("crucible_batch", 1))
@@ -212,6 +218,11 @@ static func from_dict(d: Dictionary) -> PlayerModel:
 	p.skill_ad_draws_day_key = int(d.get("skill_ad_draws_day_key", 0))
 	p.ensure_skill_generator_initialized()
 	p.task_state = d.get("task_state", {})
+	
+	# Offline Rewards
+	p.offline_pending = d.get("offline_pending", {})
+	p.offline_bonus_day_id = int(d.get("offline_bonus_day_id", 0))
+	p.offline_bonus_uses = int(d.get("offline_bonus_uses", 0))
 	
 	# Dungeons
 	var dk: Variant = d.get("dungeon_keys", {})

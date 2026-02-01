@@ -41,6 +41,12 @@ const COL_BTN_CLOSE_BR   := Color(0.55, 0.46, 0.32, 1.0)
 
 const COL_NAME_BASE := Color(0.16, 0.12, 0.09, 1.0) # darker than COL_TEXT_DARK
 
+# --- Gear icon box ---
+const GEAR_ICON_DIR := "res://assets/icons/UI/gear"
+const GEAR_ICON_DEFAULT: Texture2D = preload("res://assets/icons/UI/gear/default_icon.png")
+const GEAR_ICON_BOX_SIZE := 64
+const GEAR_ICON_BOX_PAD := 6
+
 
 # Stat list to display (extend freely)
 const STAT_DEFS := [
@@ -84,6 +90,39 @@ var _new_stats: VBoxContainer
 var _btn_sell: Button
 var _btn_equip: Button
 var _btn_close: Button
+
+var _eq_icon_box: PanelContainer
+var _eq_icon_tex: TextureRect
+
+var _new_icon_box: PanelContainer
+var _new_icon_tex: TextureRect
+
+var _eq_section_hdr: Control
+var _eq_card: PanelContainer
+var _new_section_hdr: Control
+var _new_card: PanelContainer
+
+var _eq_section: VBoxContainer
+var _new_section: VBoxContainer
+
+var _context_slot_id: int = -1
+
+
+const SLOT_ICON_KEYS := {
+	Catalog.GearSlot.WEAPON: "weapon",
+	Catalog.GearSlot.HELMET: "helmet",
+	Catalog.GearSlot.SHOULDERS: "shoulders",
+	Catalog.GearSlot.CHEST: "chest",
+	Catalog.GearSlot.GLOVES: "gloves",
+	Catalog.GearSlot.BELT: "belt",
+	Catalog.GearSlot.LEGS: "legs",
+	Catalog.GearSlot.BOOTS: "boots",
+	Catalog.GearSlot.RING: "ring",
+	Catalog.GearSlot.BRACELET: "bracelet",
+	Catalog.GearSlot.MOUNT: "mount",
+	Catalog.GearSlot.ARTIFACT: "artifact",
+}
+
 
 
 func _ready() -> void:
@@ -173,21 +212,43 @@ func _ready() -> void:
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(body)
 
-	# Equipped section
-	body.add_child(_make_section_header("Current Gear", COL_EQUIPPED_ACCENT))
+# Equipped section (wrapped)
+	_eq_section = VBoxContainer.new()
+	_eq_section.add_theme_constant_override("separation", 10)
+	body.add_child(_eq_section)
+
+	_eq_section.add_child(_make_section_header("Current Gear", COL_EQUIPPED_ACCENT))
 	var eq_card := _make_card(COL_EQUIPPED_ACCENT)
-	body.add_child(eq_card)
+	_eq_section.add_child(eq_card)
 	var eq_inner := eq_card.get_node("InnerMargin/Inner") as VBoxContainer
+	
+
+# --- Equipped header row: icon box + text ---
+	var eq_top := HBoxContainer.new()
+	eq_top.add_theme_constant_override("separation", 12)
+	eq_inner.add_child(eq_top)
+
+	var eq_icon_pack := _make_gear_icon_box()
+	_eq_icon_box = eq_icon_pack[0]
+	_eq_eq_icon_style_seed(_eq_icon_box) # optional helper for border consistency (see below)
+	_eq_icon_tex = eq_icon_pack[1]
+	eq_top.add_child(_eq_icon_box)
+
+	var eq_text := VBoxContainer.new()
+	eq_text.add_theme_constant_override("separation", 2)
+	eq_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	eq_top.add_child(eq_text)
 
 	_eq_name = Label.new()
-	_eq_name.add_theme_font_size_override("font_size", 20) # slightly bigger
+	_eq_name.add_theme_font_size_override("font_size", 20)
 	_eq_name.add_theme_constant_override("outline_size", 2)
 	_eq_name.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.12))
-	eq_inner.add_child(_eq_name)
+	eq_text.add_child(_eq_name)
 
 	_eq_cp_lbl = Label.new()
 	_eq_cp_lbl.modulate = COL_TEXT_MUTED
-	eq_inner.add_child(_eq_cp_lbl)
+	eq_text.add_child(_eq_cp_lbl)
+
 
 	eq_inner.add_child(_make_hr())
 	_eq_stats = VBoxContainer.new()
@@ -195,22 +256,43 @@ func _ready() -> void:
 	eq_inner.add_child(_eq_stats)
 
 
-	# New section
-	body.add_child(_make_section_header("NEW", COL_NEW_ACCENT))
+# New section (wrapped)
+	_new_section = VBoxContainer.new()
+	_new_section.add_theme_constant_override("separation", 10)
+	body.add_child(_new_section)
+
+	_new_section.add_child(_make_section_header("NEW", COL_NEW_ACCENT))
 	var new_card := _make_card(COL_NEW_ACCENT)
-	body.add_child(new_card)
+	_new_section.add_child(new_card)
 	var new_inner := new_card.get_node("InnerMargin/Inner") as VBoxContainer
+
+
+# --- New header row: icon box + text ---
+	var new_top := HBoxContainer.new()
+	new_top.add_theme_constant_override("separation", 12)
+	new_inner.add_child(new_top)
+
+	var new_icon_pack := _make_gear_icon_box()
+	_new_icon_box = new_icon_pack[0]
+	_eq_eq_icon_style_seed(_new_icon_box) # optional helper for border consistency (see below)
+	_new_icon_tex = new_icon_pack[1]
+	new_top.add_child(_new_icon_box)
+
+	var new_text := VBoxContainer.new()
+	new_text.add_theme_constant_override("separation", 2)
+	new_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	new_top.add_child(new_text)
 
 	_new_name = Label.new()
 	_new_name.add_theme_font_size_override("font_size", 20)
 	_new_name.add_theme_constant_override("outline_size", 2)
 	_new_name.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.12))
-	new_inner.add_child(_new_name)
-
+	new_text.add_child(_new_name)
 
 	_new_cp_lbl = Label.new()
-	_new_cp_lbl.modulate = COL_TEXT_MUTED  # except when delta coloring applies
-	new_inner.add_child(_new_cp_lbl)
+	_new_cp_lbl.modulate = COL_TEXT_MUTED
+	new_text.add_child(_new_cp_lbl)
+
 
 	new_inner.add_child(_make_hr())
 	_new_stats = VBoxContainer.new()
@@ -263,6 +345,7 @@ func _ready() -> void:
 
 
 func configure_compare(new_item: GearItem, equipped_item: GearItem, new_cp: int, eq_cp: int, delta_cp: int) -> void:
+	_context_slot_id = int(new_item.slot) if new_item != null else -1
 	_new_item = new_item
 	_eq_item = equipped_item
 	_new_cp = new_cp
@@ -276,11 +359,15 @@ func configure_compare(new_item: GearItem, equipped_item: GearItem, new_cp: int,
 	if is_node_ready():
 		_apply_pending()
 
-func configure_details(title: String, item: GearItem, cp: int) -> void:
-	_new_item = item
-	_eq_item = null
-	_new_cp = cp
-	_eq_cp = 0
+func configure_details(title: String, item: GearItem, cp: int, slot_id: int = -1) -> void:
+	_context_slot_id = slot_id
+
+	# DETAILS should be single-card: use Current Gear section
+	_eq_item = item
+	_eq_cp = cp
+
+	_new_item = null
+	_new_cp = 0
 	_delta_cp = 0
 
 	_want_compare_mode = false
@@ -290,15 +377,21 @@ func configure_details(title: String, item: GearItem, cp: int) -> void:
 	if is_node_ready():
 		_apply_pending()
 
+
 # -------------------- UI helpers --------------------
 
 func _set_mode_compare(is_compare: bool) -> void:
 	_want_compare_mode = is_compare
 	if _btn_sell == null:
 		return
+
 	_btn_sell.visible = is_compare
 	_btn_equip.visible = is_compare
 	_btn_close.visible = not is_compare
+
+	# Hide the NEW section in details mode
+	if _new_section != null:
+		_new_section.visible = is_compare
 
 func _apply_pending() -> void:
 	_set_mode_compare(_want_compare_mode)
@@ -390,12 +483,16 @@ func _refresh() -> void:
 		_eq_name.text = _item_display_name(_eq_item)
 		_eq_name.modulate = _name_color_for_item(_eq_item)
 		_eq_cp_lbl.text = "CP: %d" % _eq_cp
+		_update_gear_icon(_eq_icon_box, _eq_icon_tex, _eq_item)
 		_build_stats(_eq_stats, _eq_item, _new_item, false)
 	else:
 		_eq_name.text = "(None Equipped)"
 		_eq_name.modulate = COL_TEXT_MUTED
 		_eq_cp_lbl.text = "CP: 0"
 		_clear_children(_eq_stats)
+		_update_gear_icon(_eq_icon_box, _eq_icon_tex, null)
+
+	
 
 	# New
 	if _new_item != null:
@@ -410,7 +507,7 @@ func _refresh() -> void:
 		else:
 			_new_cp_lbl.text = line
 			_new_cp_lbl.modulate = COL_TEXT_MUTED
-
+		_update_gear_icon(_new_icon_box, _new_icon_tex, _new_item)
 		_build_stats(_new_stats, _new_item, _eq_item, true)
 	else:
 		_new_name.text = "(No Item)"
@@ -418,7 +515,9 @@ func _refresh() -> void:
 		_new_cp_lbl.text = "CP: 0"
 		_new_cp_lbl.modulate = COL_TEXT_MUTED
 		_clear_children(_new_stats)
+		_update_gear_icon(_new_icon_box, _new_icon_tex, null)
 
+	
 func _build_stats(parent_vbox: VBoxContainer, a: GearItem, b: GearItem, show_arrows: bool) -> void:
 	_clear_children(parent_vbox)
 
@@ -651,3 +750,184 @@ func _name_color_for_item(item: GearItem) -> Color:
 	var out := COL_NAME_BASE.lerp(rc, 0.45)
 	out.a = 1.0
 	return out
+
+func _make_gear_icon_box() -> Array:
+	var box := PanelContainer.new()
+	box.custom_minimum_size = Vector2(GEAR_ICON_BOX_SIZE, GEAR_ICON_BOX_SIZE)
+	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+	var st := StyleBoxFlat.new()
+	st.bg_color = COL_CARD_BORDER # will be overridden per-item
+	st.corner_radius_top_left = 12
+	st.corner_radius_top_right = 12
+	st.corner_radius_bottom_left = 12
+	st.corner_radius_bottom_right = 12
+	st.set_border_width_all(2)
+	st.border_color = COL_BORDER
+	box.add_theme_stylebox_override("panel", st)
+	box.set_meta("sb", st) # store for later edits
+
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", GEAR_ICON_BOX_PAD)
+	m.add_theme_constant_override("margin_right", GEAR_ICON_BOX_PAD)
+	m.add_theme_constant_override("margin_top", GEAR_ICON_BOX_PAD)
+	m.add_theme_constant_override("margin_bottom", GEAR_ICON_BOX_PAD)
+	box.add_child(m)
+
+	@warning_ignore("shadowed_variable_base_class")
+	var tr := TextureRect.new()
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	tr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tr.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	m.add_child(tr)
+
+	return [box, tr]
+
+# Optional: keeps border visually consistent even for bright rarity colors.
+func _eq_eq_icon_style_seed(box: PanelContainer) -> void:
+	if box == null:
+		return
+	var sb: Variant = box.get_meta("sb") if box.has_meta("sb") else null
+	if sb is StyleBoxFlat:
+		var st := sb as StyleBoxFlat
+		st.border_color = COL_BORDER
+
+@warning_ignore("shadowed_variable_base_class")
+func _update_gear_icon(box: PanelContainer, tr: TextureRect, item: GearItem) -> void:
+	if box == null or tr == null:
+		return
+
+	# Background = rarity color (or muted if none)
+	var bg := COL_TEXT_MUTED
+	if item != null:
+		bg = _rarity_color(item)
+	bg.a = 1.0
+
+	# Apply style without recreating styleboxes
+	var sb: Variant = box.get_meta("sb") if box.has_meta("sb") else null
+	if sb is StyleBoxFlat:
+		var st := sb as StyleBoxFlat
+		st.bg_color = bg
+		# Slightly deepen border based on bg so it reads well
+		st.border_color = COL_BORDER if item == null else bg.darkened(0.35)
+
+	tr.texture = _gear_icon_texture(item)
+
+func _gear_icon_texture(item: GearItem) -> Texture2D:
+	# Empty item: still try to show slot icon if we know the slot.
+	if item == null:
+		if _context_slot_id != -1:
+			var k0 := _slot_icon_key_from_slot_id(_context_slot_id)
+			var p0 := "%s/%s.png" % [GEAR_ICON_DIR, k0]
+			if ResourceLoader.exists(p0):
+				var t0 := load(p0)
+				if t0 is Texture2D:
+					return t0 as Texture2D
+		return GEAR_ICON_DEFAULT
+
+	# 1) Direct texture hook (if you add it later)
+	if item.has_method("icon_texture"):
+		var t: Variant = item.call("icon_texture")
+		if t is Texture2D:
+			return t as Texture2D
+
+	# 2) Your existing string-field probing
+	var key := ""
+	var candidates := [
+		"gear_icon", "icon_id", "icon_key", "icon", "slot", "slot_id",
+		"gear_slot", "gear_type", "type", "category", "equip_slot"
+	]
+	for c in candidates:
+		key = _get_string_field(item, c)
+		if key != "":
+			break
+
+	key = _normalize_icon_key(key)
+
+	# If the “key” is numeric (like slot id), translate it.
+	if key != "" and key.is_valid_int():
+		key = _slot_icon_key_from_slot_id(int(key))
+
+	# 3) Slot-based fallback (fixes your default-icon issue)
+	if key == "" and _context_slot_id != -1:
+		key = _slot_icon_key_from_slot_id(_context_slot_id)
+
+	if key != "":
+		var p := "%s/%s.png" % [GEAR_ICON_DIR, key]
+		if ResourceLoader.exists(p):
+			var tex := load(p)
+			if tex is Texture2D:
+				return tex as Texture2D
+
+	return GEAR_ICON_DEFAULT
+
+func _normalize_icon_key(s: String) -> String:
+	var out := s.strip_edges().to_lower()
+	if out == "":
+		return ""
+	out = out.replace(" ", "_").replace("-", "_")
+	return out
+
+func _gear_slot_id_from_item(item: GearItem) -> int:
+	if item == null or not item.has_method("get"):
+		return -1
+
+	var keys := ["slot_id", "gear_slot_id", "gear_slot", "equip_slot", "slot"]
+	for k in keys:
+		var v: Variant = item.get(k)
+		if v == null:
+			continue
+
+		if typeof(v) == TYPE_INT:
+			return int(v)
+
+		if v is String or v is StringName:
+			var s := String(v)
+			if s.is_valid_int():
+				return int(s)
+
+			# Match by name against Catalog.GEAR_SLOT_NAMES
+			var sn := _normalize_icon_key(s)
+			for sid in Catalog.GEAR_SLOT_NAMES.keys():
+				if _normalize_icon_key(String(Catalog.GEAR_SLOT_NAMES[sid])) == sn:
+					return int(sid)
+
+	return -1
+
+func _gear_icon_key_from_item(item: GearItem) -> String:
+	if item == null:
+		return ""
+
+	# 1) Explicit fields (best)
+	var explicit := ["gear_icon", "icon_key", "icon_id", "icon"]
+	for f in explicit:
+		var k := _normalize_icon_key(_get_string_field(item, f))
+		if k != "" and ResourceLoader.exists("%s/%s.png" % [GEAR_ICON_DIR, k]):
+			return k
+
+	# 2) Slot-based fallback (this fixes your “equipped uses default icon” bug)
+	var sid := _gear_slot_id_from_item(item)
+	if sid != -1:
+		var slot_name := String(Catalog.GEAR_SLOT_NAMES.get(sid, ""))
+		var k2 := _normalize_icon_key(slot_name)
+		if k2 != "" and ResourceLoader.exists("%s/%s.png" % [GEAR_ICON_DIR, k2]):
+			return k2
+
+	# 3) Other fuzzy fields (optional)
+	var other := ["type", "category"]
+	for f in other:
+		var k3 := _normalize_icon_key(_get_string_field(item, f))
+		if k3 != "" and ResourceLoader.exists("%s/%s.png" % [GEAR_ICON_DIR, k3]):
+			return k3
+
+	return ""
+
+func _slot_icon_key_from_slot_id(slot_id: int) -> String:
+	if SLOT_ICON_KEYS.has(slot_id):
+		return String(SLOT_ICON_KEYS[slot_id])
+
+	var slot_name := String(Catalog.GEAR_SLOT_NAMES.get(slot_id, ""))
+	return _normalize_icon_key(slot_name)

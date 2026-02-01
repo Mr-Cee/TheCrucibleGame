@@ -267,7 +267,9 @@ func _update_offline_hint() -> void:
 	if _offline_hint == null:
 		return
 	var secs: int = int(_offline_hours.value) * 3600 + int(_offline_mins.value) * 60
-	var cap: int = int(Catalog.OFFLINE_MAX_SECONDS)
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	var cap: int = OfflineRewards.offline_cap_seconds_for_player(Game.player, now_unix)
+
 	if secs > cap:
 		_offline_hint.text = "Capped at %dh %dm" % [cap / 3600, (cap % 3600) / 60]
 	else:
@@ -283,26 +285,70 @@ func _on_apply_offline_pressed() -> void:
 		Game.inventory_event.emit("Dev: offline time must be > 0.")
 		return
 
+	# IMPORTANT: clear any existing pending so the dev tool can re-run repeatedly
+	Game.player.offline_pending = {}
+
 	var now_unix: int = int(Time.get_unix_time_from_system())
 	Game.player.last_active_unix = now_unix - secs
 
-	# Apply rewards immediately
-	var summary: Dictionary = Game.apply_offline_rewards_on_load()
+	# Queue rewards (force=true bypasses "already_pending" protection)
+	var summary: Dictionary = Game.offline_capture_pending_on_load(true)
 
-	# Refresh UI immediately
+	# Save + refresh
 	Game.player_changed.emit()
 	_refresh_from_game()
+	SaveManager.save_now()
 
-	# Save if available (safe)
-	if Game.has_method("request_save"):
-		Game.call("request_save")
-
-	if bool(summary.get("applied", false)):
-		Game.inventory_event.emit("Dev: applied offline rewards.")
+	if Game.offline_has_pending():
+		var p := OfflinePopup.new()
+		p.setup(Game.offline_get_pending())
+		Game.popup_root().add_child(p)
+		Game.inventory_event.emit("Dev: offline rewards queued.")
 	else:
-		Game.inventory_event.emit("Dev: no offline rewards applied (too small / capped / none).")
+		Game.inventory_event.emit("Dev: no offline rewards queued (%s)." % String(summary.get("reason", "unknown")))
 
 func _on_set_level_pressed() -> void:
 	if Game.player == null:
 		return
 	Game.dev_set_character_level(int(level_spin_box.value), true)
+
+func _offline_cap_seconds() -> int:
+	# Base cap
+	var cap: int = int(Catalog.OFFLINE_MAX_SECONDS)
+
+	# Add +2h for active battle pass, +2h for premium bundle (matches your design)
+	# (If your project later centralizes this in OfflineRewards, you can swap this out.)
+	if Game.player == null:
+		return cap
+
+	var now_unix: int = int(Time.get_unix_time_from_system())
+
+	if "premium_offline_unlocked" in Game.player and bool(Game.player.premium_offline_unlocked):
+		cap += 2 * 3600
+
+	if "battlepass_expires_unix" in Game.player and int(Game.player.battlepass_expires_unix) > now_unix:
+		cap += 2 * 3600
+
+	return cap
+
+func _open_offline_popup_via_home() -> void:
+	# DevPopup is a child of Home, so walk up and call Home's private opener.
+	# This is important because Home wires up "dismissed" -> chest icon behavior.
+	var n: Node = self
+	while n != null:
+		if n.has_method("_open_offline_popup"):
+			n.call("_open_offline_popup")
+			return
+		n = n.get_parent()
+
+	# Fallback: open directly if Home isn't found
+	if Game.has_method("offline_get_pending") and Game.has_method("popup_root"):
+		var p := OfflinePopup.new()
+		p.setup(Game.offline_get_pending())
+		Game.popup_root().add_child(p)
+
+func _fmt_mmss(seconds: int) -> String:
+	seconds = maxi(0, seconds)
+	var m: int = seconds / 60
+	var s: int = seconds % 60
+	return "%d:%02d" % [m, s]

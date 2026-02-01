@@ -3,6 +3,7 @@ extends VBoxContainer
 @onready var difficulty_label: Label = $DifficultyLabel
 @onready var enemy_hp_bar: ProgressBar = $EnemyHPBar
 @onready var result_label: Label = get_node_or_null("ResultLabel") as Label
+@onready var challenge_button: Button = get_node_or_null("ChallengeButton") as Button
 
 @onready var combat_log_scroll: ScrollContainer = $CombatLogScroll
 @onready var combat_log: RichTextLabel = $CombatLogScroll/CombatLog
@@ -93,6 +94,8 @@ const PLAYER_TEX_ARCHER: Texture2D = preload("res://assets/player/archer.png")
 var _player_sprite: TextureRect = null
 var _player_sprite_key: String = ""
 
+var _challenge_row: HBoxContainer = null
+var _challenge_button: Button = null
 
 
 var _ui_accum: float = 0.0
@@ -102,6 +105,8 @@ func _ready() -> void:
 	_ensure_skills_row_ui()
 	_ensure_task_panel_overlay()
 	_ensure_battlefield_ui()
+	_ensure_challenge_button_ui()
+	_apply_challenge_button()
 	
 	# Give the combat log the vertical space by default.
 	if combat_log_scroll != null:
@@ -188,6 +193,7 @@ func _process(delta: float) -> void:
 	_apply_enemy_hp()
 	_apply_battlefield_ui()
 	_apply_skill_row()
+	_apply_challenge_button()
 
 func _apply_labels() -> void:
 	var diff: String = String(Game.battle_state.get("difficulty", "Easy"))
@@ -195,9 +201,12 @@ func _apply_labels() -> void:
 	var stg: int = int(Game.battle_state.get("stage", 1))
 	var wav: int = int(Game.battle_state.get("wave", 1))
 
-	difficulty_label.text = "%s - %d - %d (Wave %d/%d)" % [
-		diff, lvl, stg, wav, Catalog.BATTLE_WAVES_PER_STAGE
-	]
+	if _is_endless_mode_ui():
+		difficulty_label.text = "%s - %d - %d" % [diff, lvl, stg]
+	else:
+		difficulty_label.text = "%s - %d - %d (Wave %d/%d)" % [
+			diff, lvl, stg, wav, Catalog.BATTLE_WAVES_PER_STAGE
+		]
 
 func _apply_enemy_hp() -> void:
 	var hp: float = float(Game.battle_runtime.get("enemy_hp", 0.0))
@@ -539,6 +548,137 @@ func _ensure_battlefield_ui() -> void:
 	add_child(_battlefield_row)
 	move_child(_battlefield_row, insert_before)
 
+func _ensure_challenge_button_ui() -> void:
+	if _challenge_row != null:
+		return
+
+	# Row centered, full width
+	_challenge_row = HBoxContainer.new()
+	_challenge_row.name = "ChallengeRow"
+	_challenge_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_challenge_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_challenge_row.custom_minimum_size = Vector2(0, 34)
+
+	# Reuse existing scene button if present, otherwise create it.
+	if challenge_button == null:
+		challenge_button = Button.new()
+		challenge_button.name = "ChallengeButton"
+		challenge_button.text = "Challenge"
+
+	# Make it the small pill style
+	challenge_button.focus_mode = Control.FOCUS_NONE
+	challenge_button.custom_minimum_size = Vector2(128, 28)
+	challenge_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_apply_challenge_button_theme(challenge_button)
+
+	# Ensure it is parented under the row (not directly under the panel)
+	var p := challenge_button.get_parent()
+	if p != null:
+		p.remove_child(challenge_button)
+	_challenge_row.add_child(challenge_button)
+
+	# Insert row directly under HP bar
+	add_child(_challenge_row)
+	if enemy_hp_bar != null:
+		move_child(_challenge_row, enemy_hp_bar.get_index() + 1)
+
+	# Wire once
+	if not challenge_button.pressed.is_connected(_on_challenge_pressed):
+		challenge_button.pressed.connect(_on_challenge_pressed)
+
+	# Default hidden; driven by _apply_challenge_button()
+	_challenge_row.visible = false
+	challenge_button.disabled = true
+
+func _apply_challenge_button_theme(b: Button) -> void:
+	# Typography
+	b.add_theme_font_size_override("font_size", 14)
+	b.add_theme_color_override("font_color", Color8(255, 240, 240))
+	b.add_theme_color_override("font_hover_color", Color8(255, 255, 255))
+	b.add_theme_color_override("font_pressed_color", Color8(255, 255, 255))
+	b.add_theme_color_override("font_disabled_color", Color8(220, 220, 220))
+
+	# Normal
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color8(190, 45, 45)
+	normal.border_color = Color8(95, 15, 15)
+	normal.border_width_left = 2
+	normal.border_width_top = 2
+	normal.border_width_right = 2
+	normal.border_width_bottom = 3
+	normal.corner_radius_top_left = 12
+	normal.corner_radius_top_right = 12
+	normal.corner_radius_bottom_left = 12
+	normal.corner_radius_bottom_right = 12
+	normal.content_margin_left = 12
+	normal.content_margin_right = 12
+	normal.content_margin_top = 4
+	normal.content_margin_bottom = 4
+
+	# Hover
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color8(215, 55, 55)
+
+	# Pressed
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color8(155, 35, 35)
+	pressed.border_width_bottom = 2
+
+	# Disabled
+	var disabled := normal.duplicate() as StyleBoxFlat
+	disabled.bg_color = Color8(120, 60, 60)
+	disabled.border_color = Color8(70, 40, 40)
+
+	b.add_theme_stylebox_override("normal", normal)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", pressed)
+	b.add_theme_stylebox_override("disabled", disabled)
+
+func _is_endless_mode_ui() -> bool:
+	# Endless mode = boss was attempted/failed and the Challenge button is available.
+	return _can_challenge_wave5_ui()
+
+func _can_challenge_wave5_ui() -> bool:
+	if Game == null:
+		return false
+
+	# Preferred: Game proxies BattleSystem methods (recommended).
+	if Game.has_method("can_challenge_wave5"):
+		return bool(Game.call("can_challenge_wave5"))
+
+	# Fallback: if Game exposes battle_system directly.
+	var bs: Variant = null
+	if Game.has_method("get"):
+		bs = Game.get("battle_system")
+	if bs != null and (bs as Object).has_method("can_challenge_wave5"):
+		return bool((bs as Object).call("can_challenge_wave5"))
+
+	return false
+
+func _apply_challenge_button() -> void:
+	if _challenge_row == null or challenge_button == null:
+		return
+
+	var can := _can_challenge_wave5_ui()
+	_challenge_row.visible = can
+	challenge_button.disabled = not can
+
+func _on_challenge_pressed() -> void:
+	if Game == null:
+		return
+
+	# Preferred: Game proxies to BattleSystem.
+	if Game.has_method("challenge_wave5"):
+		Game.call("challenge_wave5")
+		return
+
+	# Fallback: direct battle_system call if exposed.
+	var bs: Variant = null
+	if Game.has_method("get"):
+		bs = Game.get("battle_system")
+	if bs != null and (bs as Object).has_method("challenge_wave5"):
+		(bs as Object).call("challenge_wave5")
+
 func _rebuild_enemy_squares(count: int) -> void:
 	# Clear existing enemy cells
 	for c in _enemy_squares:
@@ -550,8 +690,8 @@ func _rebuild_enemy_squares(count: int) -> void:
 	if _enemy_textures.is_empty():
 		_load_enemy_textures()
 
-	var wave: int = int(Game.battle_state.get("wave", 1))
-	var is_boss: bool = (wave == Catalog.BATTLE_WAVES_PER_STAGE)
+	var is_boss: bool = _is_boss_visual()
+
 	var scale_mult: float = (BOSS_SPR_SCALE_MULT if is_boss else 1.0)
 	var sprite_size: Vector2 = (Vector2(132, 132) if is_boss else Vector2(92, 92))
 
@@ -892,7 +1032,8 @@ func _current_layout_key(enemy_count: int) -> String:
 	var lvl: int = int(Game.battle_state.get("level", 1))
 	var stg: int = int(Game.battle_state.get("stage", 1))
 	var wav: int = int(Game.battle_state.get("wave", 1))
-	var boss: int = (1 if bool(Game.battle_runtime.get("is_boss", false)) else 0)
+	var boss: int = (1 if _is_boss_visual() else 0)
+
 	return "%s|%d|%d|%d|%d|%d" % [diff, lvl, stg, wav, enemy_count, boss]
 
 func _ensure_enemy_jitter(enemy_count: int) -> void:
@@ -992,3 +1133,14 @@ func _layout_battlefield(enemy_count: int) -> void:
 				cell.set_meta("arrived", true)
 			else:
 				cell.position = cell.position.lerp(pos, ENEMY_FOLLOW_LERP)
+
+func _is_boss_visual() -> bool:
+	# Prefer runtime truth, not the wave number.
+	var is_boss: bool = bool(Game.battle_runtime.get("is_boss", false))
+
+	# If Challenge is available, we’re in the post-fail endless loop.
+	# Endless should look like normal enemy packs (not boss visuals).
+	if _can_challenge_wave5_ui():
+		is_boss = false
+
+	return is_boss

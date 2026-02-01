@@ -16,8 +16,6 @@ signal dungeon_finished(dungeon_id: String, attempted_level: int, success: bool,
 var _dungeon_return_scene_path: String = ""
 var _pending_dungeon_id: String = ""
 
-
-
 #===================================================================================================
 
 var player: PlayerModel
@@ -220,68 +218,6 @@ func sell_item(item: GearItem) -> int:
 	inventory_event.emit("Sold for %d gold" % value)
 	return value
 
-func apply_offline_rewards_on_load() -> Dictionary:
-	if player == null:
-		return {"applied": false}
-
-	var now_unix: int = int(Time.get_unix_time_from_system())
-	var last_unix: int = int(player.last_active_unix)
-
-	if last_unix <= 0:
-		player.last_active_unix = now_unix
-		return {"applied": false}
-
-	var dt: int = now_unix - last_unix
-	if dt <= 0:
-		player.last_active_unix = now_unix
-		return {"applied": false}
-
-	# Dynamic cap based on entitlements
-	var cap: int = Catalog.offline_cap_seconds_for_player(player, now_unix)
-	var capped: int = mini(dt, cap)
-
-	if capped < 30:
-		player.last_active_unix = now_unix
-		return {"applied": false}
-
-	# IMPORTANT: offline rewards depend only on difficulty + level
-	var diff: String = String(battle_state.get("difficulty", "Easy"))
-	var lvl: int = int(battle_state.get("level", 1))
-
-	var sim: Dictionary = Catalog.offline_simulate_rewards(player.level, diff, lvl, capped)
-
-	var gold_gain: int = int(sim.get("gold", 0))
-	var key_gain: int = int(sim.get("keys", 0))
-	var xp_gain: int = int(sim.get("xp", 0))
-
-	if gold_gain != 0:
-		player.gold += gold_gain
-	if key_gain != 0:
-		player.crucible_keys += key_gain
-
-	var levels: int = 0
-	if xp_gain > 0:
-		levels = player.add_xp(xp_gain)
-
-	# DO NOT modify battle_state at all (true simulation)
-	player.last_active_unix = now_unix
-
-	inventory_event.emit(
-		"Offline (%s): +%d gold, +%d keys, +%d XP" % [_fmt_duration_short(capped), gold_gain, key_gain, xp_gain]
-	)
-	print("Offline (%s): +%d gold, +%d keys, +%d XP" % [_fmt_duration_short(capped), gold_gain, key_gain, xp_gain]
-	)
-	if levels > 0:
-		inventory_event.emit("Level Up! Lv.%d" % player.level)
-
-	return {
-		"applied": (gold_gain != 0 or key_gain != 0 or xp_gain != 0),
-		"seconds": capped,
-		"gold": gold_gain,
-		"keys": key_gain,
-		"xp": xp_gain,
-		"levels": levels,
-	}
 
 func _fmt_duration_short(seconds: int) -> String:
 	seconds = maxi(0, seconds)
@@ -633,3 +569,172 @@ func open_dungeon_panel() -> void:
 	var ui := popup_root()
 	var panel := DungeonsPanel.new() # rename if your class_name differs
 	ui.add_child(panel)
+
+func can_challenge_wave5() -> bool:
+	return battle_system != null and battle_system.can_challenge_wave5()
+
+func challenge_wave5() -> void:
+	if battle_system != null:
+		battle_system.challenge_wave5()
+
+func offline_capture_pending_on_load(force: bool = false) -> Dictionary:
+	if player == null:
+		return {"queued": false, "reason": "no_player"}
+
+	# If we already have pending rewards, do not re-simulate (prevents double counting).
+	# Dev tools can force a re-simulate.
+	if not force and not _offline_pending_dict().is_empty():
+		return {"queued": false, "reason": "already_pending"}
+
+	if force:
+		player.offline_pending = {}
+
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	var last_unix: int = int(player.last_active_unix)
+
+	# Always maintain daily reset bookkeeping
+	OfflineRewards.reset_bonus_if_new_day(player, now_unix)
+
+	if last_unix <= 0:
+		player.last_active_unix = now_unix
+		return {"queued": false, "reason": "no_last_active"}
+
+	var dt: int = now_unix - last_unix
+	if dt <= 0:
+		player.last_active_unix = now_unix
+		return {"queued": false, "reason": "nonpositive_dt", "dt": dt}
+
+	var cap: int = OfflineRewards.offline_cap_seconds_for_player(player, now_unix)
+	var capped: int = mini(dt, cap)
+
+	# Require at least 30 seconds before we queue anything
+	if capped < 30:
+		player.last_active_unix = now_unix
+		return {"queued": false, "reason": "too_small", "dt": dt, "cap": cap, "capped": capped}
+
+	# Snapshot battle position used for sim
+	var diff: String = String(battle_state.get("difficulty", "Easy"))
+	var lvl: int = int(battle_state.get("level", 1))
+
+	var sim: Dictionary = OfflineRewards.offline_simulate_rewards(player.level, diff, lvl, capped)
+
+	var gold_gain: int = int(sim.get("gold", 0))
+	var key_gain: int = int(sim.get("keys", 0))
+	var xp_gain: int = int(sim.get("xp", 0))
+
+	player.offline_pending = {
+		"available": true,
+		"raw_seconds": dt,
+		"cap_seconds": cap,
+		"base_seconds": capped,
+
+		"difficulty": diff,
+		"battle_level": lvl,
+
+		"gold": gold_gain,
+		"keys": key_gain,
+		"xp": xp_gain,
+
+		"bonus_seconds": 0,
+		"bonus_gold": 0,
+		"bonus_keys": 0,
+		"bonus_xp": 0,
+	}
+
+	# Advance last_active_unix NOW so we don't re-award next launch.
+	player.last_active_unix = now_unix
+
+	return {
+		"queued": true,
+		"dt": dt,
+		"cap": cap,
+		"capped": capped,
+		"gold": gold_gain,
+		"keys": key_gain,
+		"xp": xp_gain,
+		"diff": diff,
+		"level": lvl,
+	}
+
+func _offline_pending_dict() -> Dictionary:
+	if player == null:
+		return {}
+
+	# Works whether offline_pending is a declared var OR a dynamic property.
+	var v: Variant = null
+	if player.has_method("get"):
+		v = player.get("offline_pending")
+	else:
+		# If PlayerModel is typed and has offline_pending, this is fine.
+		v = player.offline_pending
+
+	return v if (v is Dictionary) else {}
+
+func offline_has_pending() -> bool:
+	var pend := _offline_pending_dict()
+	return not pend.is_empty()
+
+func offline_get_pending() -> Dictionary:
+	return _offline_pending_dict()
+
+func offline_apply_bonus_2h() -> Dictionary:
+	if not offline_has_pending():
+		return {"ok": false, "reason": "no_pending"}
+
+	var now_unix: int = int(Time.get_unix_time_from_system())
+	if not OfflineRewards.consume_bonus_use(player, now_unix):
+		return {"ok": false, "reason": "limit"}
+
+	var pend: Dictionary = player.offline_pending
+	var diff: String = String(pend.get("difficulty", String(battle_state.get("difficulty", "Easy"))))
+	var lvl: int = int(pend.get("battle_level", int(battle_state.get("level", 1))))
+
+	var sim: Dictionary = OfflineRewards.offline_simulate_rewards(player.level, diff, lvl, OfflineRewards.OFFLINE_BONUS_SECONDS)
+
+	pend["bonus_seconds"] = int(pend.get("bonus_seconds", 0)) + OfflineRewards.OFFLINE_BONUS_SECONDS
+	pend["bonus_gold"] = int(pend.get("bonus_gold", 0)) + int(sim.get("gold", 0))
+	pend["bonus_keys"] = int(pend.get("bonus_keys", 0)) + int(sim.get("keys", 0))
+	pend["bonus_xp"] = int(pend.get("bonus_xp", 0)) + int(sim.get("xp", 0))
+
+	player.offline_pending = pend
+	player_changed.emit()
+	SaveManager.save_now()
+
+	return {
+		"ok": true,
+		"added_seconds": OfflineRewards.OFFLINE_BONUS_SECONDS,
+		"gold": int(sim.get("gold", 0)),
+		"keys": int(sim.get("keys", 0)),
+		"xp": int(sim.get("xp", 0)),
+		"uses_remaining": OfflineRewards.bonus_uses_remaining(player, now_unix),
+	}
+
+func offline_claim_pending() -> Dictionary:
+	if not offline_has_pending():
+		return {"ok": false, "reason": "no_pending"}
+
+	var pend: Dictionary = player.offline_pending
+
+	var gold_gain: int = int(pend.get("gold", 0)) + int(pend.get("bonus_gold", 0))
+	var key_gain: int = int(pend.get("keys", 0)) + int(pend.get("bonus_keys", 0))
+	var xp_gain: int = int(pend.get("xp", 0)) + int(pend.get("bonus_xp", 0))
+
+	if gold_gain != 0:
+		player.gold += gold_gain
+	if key_gain != 0:
+		player.crucible_keys += key_gain
+
+	var levels: int = 0
+	if xp_gain > 0:
+		levels = player.add_xp(xp_gain)
+
+	# Clear pending so it cannot be claimed twice
+	player.offline_pending = {}
+	player_changed.emit()
+	SaveManager.save_now()
+
+	inventory_event.emit("Offline rewards claimed: +%d gold, +%d keys, +%d XP" % [gold_gain, key_gain, xp_gain])
+	if levels > 0:
+		inventory_event.emit("Level Up! Lv.%d" % player.level)
+
+	return {"ok": true, "gold": gold_gain, "keys": key_gain, "xp": xp_gain, "levels": levels}

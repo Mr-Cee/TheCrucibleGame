@@ -1,11 +1,10 @@
-[gd_scene load_steps=10 format=3 uid="uid://b67ptcs0wuaom"]
+[gd_scene format=3 uid="uid://b67ptcs0wuaom"]
 
 [ext_resource type="Script" uid="uid://duue37ceul2eu" path="res://scripts/ui/Home.gd" id="1_q8k43"]
 [ext_resource type="Script" uid="uid://dsrf0yho3x3xx" path="res://scripts/ui/BattlePanel.gd" id="2_qhh6x"]
 [ext_resource type="Script" uid="uid://c7hs3wd6qyjoa" path="res://scripts/ui/CruciblePanel.gd" id="3_dsbsq"]
 [ext_resource type="Script" uid="uid://lphcl2pckchy" path="res://scripts/ui/speedbox.gd" id="3_y282l"]
 [ext_resource type="Script" uid="uid://bg8bd7hdof10m" path="res://scripts/ui/GearPanel.gd" id="4_y282l"]
-[ext_resource type="Script" uid="uid://bygie1to68dx5" path="res://scripts/ui/crucible_upgrade_popup.gd" id="5_qhh6x"]
 [ext_resource type="Script" uid="uid://bgq4wivjcuh04" path="res://scripts/ui/DevPopup.gd" id="7_y282l"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q8k43"]
@@ -23,7 +22,7 @@ corner_radius_bottom_left = 6
 [sub_resource type="LabelSettings" id="LabelSettings_q8k43"]
 font_size = 12
 
-[node name="Home" type="Control"]
+[node name="Home" type="Control" unique_id=726959618]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -32,7 +31,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_q8k43")
 
-[node name="RootMargin" type="MarginContainer" parent="."]
+[node name="RootMargin" type="MarginContainer" parent="." unique_id=143515552]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -44,94 +43,94 @@ theme_override_constants/margin_top = 24
 theme_override_constants/margin_right = 24
 theme_override_constants/margin_bottom = 24
 
-[node name="RootVBox" type="VBoxContainer" parent="RootMargin"]
+[node name="RootVBox" type="VBoxContainer" parent="RootMargin" unique_id=1003273130]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="TopHUDRow" type="HBoxContainer" parent="RootMargin/RootVBox"]
+[node name="TopHUDRow" type="HBoxContainer" parent="RootMargin/RootVBox" unique_id=794742921]
 layout_mode = 2
 
-[node name="CharacterHUD" type="PanelContainer" parent="RootMargin/RootVBox/TopHUDRow"]
+[node name="CharacterHUD" type="PanelContainer" parent="RootMargin/RootVBox/TopHUDRow" unique_id=230955971]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="CharacterVBox" type="VBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD"]
+[node name="CharacterVBox" type="VBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD" unique_id=397041336]
 layout_mode = 2
 
-[node name="HeaderRow" type="HBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+[node name="HeaderRow" type="HBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox" unique_id=176990721]
 layout_mode = 2
 
-[node name="NameButton" type="Button" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow"]
+[node name="NameButton" type="Button" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow" unique_id=798417069]
 layout_mode = 2
 text = "CharacterName"
 
-[node name="ClassLevelLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow"]
+[node name="ClassLevelLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox/HeaderRow" unique_id=1953843938]
 layout_mode = 2
 text = "Class Label + level"
 
-[node name="HPBar" type="ProgressBar" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+[node name="HPBar" type="ProgressBar" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox" unique_id=666863063]
 layout_mode = 2
 
-[node name="XPBar" type="ProgressBar" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+[node name="XPBar" type="ProgressBar" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox" unique_id=584415951]
 layout_mode = 2
 
-[node name="CPLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox"]
+[node name="CPLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CharacterHUD/CharacterVBox" unique_id=247005465]
 layout_mode = 2
 mouse_filter = 1
 text = "CP"
 
-[node name="CurrencyHUD" type="PanelContainer" parent="RootMargin/RootVBox/TopHUDRow"]
+[node name="CurrencyHUD" type="PanelContainer" parent="RootMargin/RootVBox/TopHUDRow" unique_id=869653002]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="CurrencyVBox" type="VBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD"]
+[node name="CurrencyVBox" type="VBoxContainer" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD" unique_id=723099420]
 layout_mode = 2
 
-[node name="GoldLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox"]
+[node name="GoldLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox" unique_id=2106035315]
 layout_mode = 2
 text = "Gold"
 
-[node name="DiamondsLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox"]
+[node name="DiamondsLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox" unique_id=4507653]
 layout_mode = 2
 text = "Diamonds"
 
-[node name="CrystalsLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox"]
+[node name="CrystalsLabel" type="Label" parent="RootMargin/RootVBox/TopHUDRow/CurrencyHUD/CurrencyVBox" unique_id=1655317545]
 layout_mode = 2
 text = "Crystals"
 
-[node name="BattleSection" type="VBoxContainer" parent="RootMargin/RootVBox"]
+[node name="BattleSection" type="VBoxContainer" parent="RootMargin/RootVBox" unique_id=327657199]
 layout_mode = 2
 size_flags_vertical = 3
 script = ExtResource("2_qhh6x")
 
-[node name="DifficultyLabel" type="Label" parent="RootMargin/RootVBox/BattleSection"]
+[node name="DifficultyLabel" type="Label" parent="RootMargin/RootVBox/BattleSection" unique_id=843060272]
 layout_mode = 2
 text = "Difficulty"
 horizontal_alignment = 1
 
-[node name="EnemyHPBar" type="ProgressBar" parent="RootMargin/RootVBox/BattleSection"]
+[node name="EnemyHPBar" type="ProgressBar" parent="RootMargin/RootVBox/BattleSection" unique_id=1903741936]
 layout_mode = 2
 
-[node name="LogControls" type="HBoxContainer" parent="RootMargin/RootVBox/BattleSection"]
+[node name="LogControls" type="HBoxContainer" parent="RootMargin/RootVBox/BattleSection" unique_id=1025720948]
 layout_mode = 2
 
-[node name="LogFilter" type="OptionButton" parent="RootMargin/RootVBox/BattleSection/LogControls"]
+[node name="LogFilter" type="OptionButton" parent="RootMargin/RootVBox/BattleSection/LogControls" unique_id=743522693]
 layout_mode = 2
 
-[node name="CompactToggle" type="CheckButton" parent="RootMargin/RootVBox/BattleSection/LogControls"]
+[node name="CompactToggle" type="CheckButton" parent="RootMargin/RootVBox/BattleSection/LogControls" unique_id=1501266569]
 layout_mode = 2
 text = "Compact"
 
-[node name="ClearLogButton" type="Button" parent="RootMargin/RootVBox/BattleSection/LogControls"]
+[node name="ClearLogButton" type="Button" parent="RootMargin/RootVBox/BattleSection/LogControls" unique_id=1008053025]
 layout_mode = 2
 text = "Clear"
 
-[node name="CombatLogScroll" type="ScrollContainer" parent="RootMargin/RootVBox/BattleSection"]
+[node name="CombatLogScroll" type="ScrollContainer" parent="RootMargin/RootVBox/BattleSection" unique_id=166935137]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="CombatLog" type="RichTextLabel" parent="RootMargin/RootVBox/BattleSection/CombatLogScroll"]
+[node name="CombatLog" type="RichTextLabel" parent="RootMargin/RootVBox/BattleSection/CombatLogScroll" unique_id=233772]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -139,106 +138,106 @@ bbcode_enabled = true
 fit_content = true
 scroll_active = false
 
-[node name="BattleArea" type="Control" parent="RootMargin/RootVBox/BattleSection"]
+[node name="BattleArea" type="Control" parent="RootMargin/RootVBox/BattleSection" unique_id=1488607459]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="SkillsRow" type="HBoxContainer" parent="RootMargin/RootVBox/BattleSection"]
+[node name="SkillsRow" type="HBoxContainer" parent="RootMargin/RootVBox/BattleSection" unique_id=1364306916]
 layout_mode = 2
 
-[node name="AutoSkillsToggle" type="CheckButton" parent="RootMargin/RootVBox/BattleSection/SkillsRow"]
+[node name="AutoSkillsToggle" type="CheckButton" parent="RootMargin/RootVBox/BattleSection/SkillsRow" unique_id=103795285]
 layout_mode = 2
 
-[node name="CrucibleRow" type="HBoxContainer" parent="RootMargin/RootVBox"]
+[node name="CrucibleRow" type="HBoxContainer" parent="RootMargin/RootVBox" unique_id=1012856352]
 layout_mode = 2
 
-[node name="SpeedBox" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow"]
+[node name="SpeedBox" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow" unique_id=2111521943]
 layout_mode = 2
 size_flags_vertical = 8
 script = ExtResource("3_y282l")
 
-[node name="SpeedVBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox"]
+[node name="SpeedVBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox" unique_id=499103860]
 layout_mode = 2
 
-[node name="SpeedLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox/SpeedVBox"]
+[node name="SpeedLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox/SpeedVBox" unique_id=948665727]
 layout_mode = 2
 text = "Speed"
 
-[node name="SpeedButton" type="OptionButton" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox/SpeedVBox"]
+[node name="SpeedButton" type="OptionButton" parent="RootMargin/RootVBox/CrucibleRow/SpeedBox/SpeedVBox" unique_id=823692435]
 layout_mode = 2
 
-[node name="CruciblePanel" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow"]
+[node name="CruciblePanel" type="PanelContainer" parent="RootMargin/RootVBox/CrucibleRow" unique_id=569641248]
 layout_mode = 2
 size_flags_horizontal = 6
 size_flags_vertical = 8
 script = ExtResource("3_dsbsq")
 
-[node name="VBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel"]
+[node name="VBox" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel" unique_id=997188509]
 layout_mode = 2
 size_flags_vertical = 8
 
-[node name="HeaderRow" type="HBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+[node name="HeaderRow" type="HBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox" unique_id=1417539401]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="CrucibleTitle" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/HeaderRow"]
+[node name="CrucibleTitle" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/HeaderRow" unique_id=1795113957]
 layout_mode = 2
 text = "Crucible"
 
-[node name="LevelStatusLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/HeaderRow"]
+[node name="LevelStatusLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/HeaderRow" unique_id=1250428342]
 layout_mode = 2
 
-[node name="KeysRow" type="HBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+[node name="KeysRow" type="HBoxContainer" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox" unique_id=416396546]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="KeysLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/KeysRow"]
+[node name="KeysLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/KeysRow" unique_id=540450386]
 layout_mode = 2
 text = "Keys"
 
-[node name="KeysStatusLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/KeysRow"]
+[node name="KeysStatusLabel" type="Label" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox/KeysRow" unique_id=812114112]
 layout_mode = 2
 
-[node name="DrawButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox"]
+[node name="DrawButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CruciblePanel/VBox" unique_id=1570356845]
 custom_minimum_size = Vector2(150, 0)
 layout_mode = 2
 size_flags_horizontal = 4
 size_flags_vertical = 4
 text = "Draw"
 
-[node name="CrucibleSideButtons" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow"]
+[node name="CrucibleSideButtons" type="VBoxContainer" parent="RootMargin/RootVBox/CrucibleRow" unique_id=1281892311]
 layout_mode = 2
 size_flags_horizontal = 0
 size_flags_vertical = 8
 
-[node name="UpgradeButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons"]
+[node name="UpgradeButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons" unique_id=538782054]
 layout_mode = 2
 text = "Upgrade"
 
-[node name="FilterButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons"]
+[node name="FilterButton" type="Button" parent="RootMargin/RootVBox/CrucibleRow/CrucibleSideButtons" unique_id=1976117421]
 layout_mode = 2
 text = "Auto"
 
-[node name="GearStrip" type="HBoxContainer" parent="RootMargin/RootVBox"]
+[node name="GearStrip" type="HBoxContainer" parent="RootMargin/RootVBox" unique_id=1019660737]
 layout_mode = 2
 script = ExtResource("4_y282l")
 
-[node name="GearGridPanel" type="PanelContainer" parent="RootMargin/RootVBox/GearStrip"]
+[node name="GearGridPanel" type="PanelContainer" parent="RootMargin/RootVBox/GearStrip" unique_id=76777592]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="GearGrid" type="GridContainer" parent="RootMargin/RootVBox/GearStrip/GearGridPanel"]
+[node name="GearGrid" type="GridContainer" parent="RootMargin/RootVBox/GearStrip/GearGridPanel" unique_id=990773762]
 layout_mode = 2
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 4
 columns = 5
 
-[node name="SlotButton1" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton1" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=74698303]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1" unique_id=481786844]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -247,7 +246,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1" unique_id=878549449]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -257,7 +256,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1" unique_id=1820107455]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -266,7 +265,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1" unique_id=1033124023]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -277,7 +276,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton1" unique_id=1549696315]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -288,12 +287,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton2" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton2" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=135741652]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2" unique_id=825244444]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -302,7 +301,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2" unique_id=2107534080]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -312,7 +311,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2" unique_id=1434988971]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -321,7 +320,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2" unique_id=1378714351]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -332,7 +331,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton2" unique_id=473000351]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -343,12 +342,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton3" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton3" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=48457892]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3" unique_id=633440317]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -357,7 +356,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3" unique_id=2022428918]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -367,7 +366,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3" unique_id=1646589823]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -376,7 +375,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3" unique_id=734611241]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -387,7 +386,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton3" unique_id=1789540404]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -398,12 +397,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton4" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton4" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=60090594]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4" unique_id=1387421841]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -412,7 +411,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4" unique_id=429343582]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -422,7 +421,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4" unique_id=1291206198]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -431,7 +430,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4" unique_id=1758845498]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -442,7 +441,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton4" unique_id=1461525761]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -453,12 +452,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton5" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton5" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=572121070]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5" unique_id=2099340735]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -467,7 +466,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5" unique_id=840516734]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -477,7 +476,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5" unique_id=513809669]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -486,7 +485,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5" unique_id=821564377]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -497,7 +496,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton5" unique_id=680684182]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -508,12 +507,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton6" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton6" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=869285369]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6" unique_id=1523247927]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -522,7 +521,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6" unique_id=1529562005]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -532,7 +531,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6" unique_id=1064452843]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -541,7 +540,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6" unique_id=1674063721]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -552,7 +551,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton6" unique_id=1009716020]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -563,12 +562,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton7" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton7" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=1256449555]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7" unique_id=307916550]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -577,7 +576,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7" unique_id=101901112]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -587,7 +586,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7" unique_id=1581562172]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -596,7 +595,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7" unique_id=1879880094]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -607,7 +606,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton7" unique_id=1466776567]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -618,12 +617,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton8" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton8" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=1672926690]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8" unique_id=354738470]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -632,7 +631,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8" unique_id=1308799663]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -642,7 +641,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8" unique_id=588618160]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -651,7 +650,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8" unique_id=877537177]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -662,7 +661,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton8" unique_id=535852509]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -673,12 +672,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton9" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton9" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=564750234]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9" unique_id=1689204772]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -687,7 +686,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9" unique_id=1448655035]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -697,7 +696,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9" unique_id=342566365]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -706,7 +705,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9" unique_id=85479417]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -717,7 +716,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton9" unique_id=1564462694]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -728,12 +727,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton10" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton10" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=691559203]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10" unique_id=802087471]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -742,7 +741,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10" unique_id=1090129429]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -752,7 +751,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10" unique_id=1074937682]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -761,7 +760,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10" unique_id=2024094255]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -772,7 +771,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton10" unique_id=2109563573]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -783,12 +782,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton11" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton11" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=844719968]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11" unique_id=24387345]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -797,7 +796,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11" unique_id=230466907]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -807,7 +806,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11" unique_id=5291999]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -816,7 +815,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11" unique_id=1347816067]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -827,7 +826,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton11" unique_id=1779566632]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -838,12 +837,12 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="SlotButton12" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid"]
+[node name="SlotButton12" type="TextureButton" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid" unique_id=460462912]
 custom_minimum_size = Vector2(72, 72)
 layout_mode = 2
 stretch_mode = 0
 
-[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+[node name="RarityFrame" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12" unique_id=483947450]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -852,7 +851,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 
-[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+[node name="BG" type="Panel" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12" unique_id=1867414622]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -862,7 +861,7 @@ grow_vertical = 2
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_q8k43")
 
-[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+[node name="Icon" type="TextureRect" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12" unique_id=288411728]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -871,7 +870,7 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch_mode = 5
 
-[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+[node name="LevelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12" unique_id=1390501468]
 layout_mode = 1
 anchors_preset = 12
 anchor_top = 1.0
@@ -882,7 +881,7 @@ grow_horizontal = 2
 grow_vertical = 0
 horizontal_alignment = 1
 
-[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12"]
+[node name="Label" type="Label" parent="RootMargin/RootVBox/GearStrip/GearGridPanel/GearGrid/SlotButton12" unique_id=284145126]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -893,395 +892,236 @@ label_settings = SubResource("LabelSettings_q8k43")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="GearPanelArea" type="PanelContainer" parent="RootMargin/RootVBox/GearStrip"]
+[node name="GearPanelArea" type="PanelContainer" parent="RootMargin/RootVBox/GearStrip" unique_id=1613134380]
 custom_minimum_size = Vector2(260, 0)
 layout_mode = 2
 size_flags_stretch_ratio = 0.0
 
-[node name="GearVBox" type="VBoxContainer" parent="RootMargin/RootVBox/GearStrip/GearPanelArea"]
+[node name="GearVBox" type="VBoxContainer" parent="RootMargin/RootVBox/GearStrip/GearPanelArea" unique_id=651720253]
 layout_mode = 2
 
-[node name="GearPanelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearPanelArea/GearVBox"]
+[node name="GearPanelLabel" type="Label" parent="RootMargin/RootVBox/GearStrip/GearPanelArea/GearVBox" unique_id=1136733060]
 layout_mode = 2
 
-[node name="OpenGearButton" type="Button" parent="RootMargin/RootVBox/GearStrip/GearPanelArea/GearVBox"]
+[node name="OpenGearButton" type="Button" parent="RootMargin/RootVBox/GearStrip/GearPanelArea/GearVBox" unique_id=109486861]
 layout_mode = 2
 text = "->"
 
-[node name="TownNav" type="PanelContainer" parent="RootMargin/RootVBox"]
+[node name="TownNav" type="PanelContainer" parent="RootMargin/RootVBox" unique_id=1415958445]
 layout_mode = 2
 
-[node name="TownNavRow" type="HBoxContainer" parent="RootMargin/RootVBox/TownNav"]
+[node name="TownNavRow" type="HBoxContainer" parent="RootMargin/RootVBox/TownNav" unique_id=1192147752]
 layout_mode = 2
 
-[node name="HomeBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+[node name="HomeBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow" unique_id=497029381]
 layout_mode = 2
 text = "Home"
 
-[node name="SkillsBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+[node name="SkillsBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow" unique_id=569176989]
 layout_mode = 2
 text = "Skills"
 
-[node name="ShopBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+[node name="ShopBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow" unique_id=611649436]
 layout_mode = 2
 text = "Shop"
 
-[node name="DungeonBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+[node name="DungeonBtn" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow" unique_id=1115205720]
 layout_mode = 2
 text = "Dugeons (WIP)"
 
-[node name="FutureBtn2" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow"]
+[node name="FutureBtn2" type="Button" parent="RootMargin/RootVBox/TownNav/TownNavRow" unique_id=786721797]
 layout_mode = 2
 disabled = true
 text = "Future"
 
-[node name="ComparePopup" type="Window" parent="."]
-oversampling_override = 1.0
-visible = false
-
-[node name="RootVBox" type="VBoxContainer" parent="ComparePopup"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="CardsRow" type="HBoxContainer" parent="ComparePopup/RootVBox"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 12
-
-[node name="LeftCol" type="VBoxContainer" parent="ComparePopup/RootVBox/CardsRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="NewCard" type="PanelContainer" parent="ComparePopup/RootVBox/CardsRow/LeftCol"]
-custom_minimum_size = Vector2(0, 220)
-layout_mode = 2
-
-[node name="Margin" type="MarginContainer" parent="ComparePopup/RootVBox/CardsRow/LeftCol/NewCard"]
-layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 12
-
-[node name="NewItemLabel" type="RichTextLabel" parent="ComparePopup/RootVBox/CardsRow/LeftCol/NewCard/Margin"]
-custom_minimum_size = Vector2(0, 140)
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="LeftButtonsRow" type="HBoxContainer" parent="ComparePopup/RootVBox/CardsRow/LeftCol"]
-layout_mode = 2
-
-[node name="EquipButton" type="Button" parent="ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow"]
-layout_mode = 2
-text = "Equip"
-
-[node name="SellButton" type="Button" parent="ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow"]
-layout_mode = 2
-text = "Sell"
-
-[node name="CloseButton" type="Button" parent="ComparePopup/RootVBox/CardsRow/LeftCol/LeftButtonsRow"]
-layout_mode = 2
-text = "Close"
-
-[node name="RightCol" type="VBoxContainer" parent="ComparePopup/RootVBox/CardsRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="EquippedCard" type="PanelContainer" parent="ComparePopup/RootVBox/CardsRow/RightCol"]
-custom_minimum_size = Vector2(0, 220)
-layout_mode = 2
-
-[node name="Margin" type="MarginContainer" parent="ComparePopup/RootVBox/CardsRow/RightCol/EquippedCard"]
-layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 12
-
-[node name="EquippedItemLabel" type="RichTextLabel" parent="ComparePopup/RootVBox/CardsRow/RightCol/EquippedCard/Margin"]
-custom_minimum_size = Vector2(0, 140)
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="AutoPopup" type="Window" parent="."]
+[node name="AutoPopup" type="Window" parent="." unique_id=869570585]
 oversampling_override = 1.0
 position = Vector2i(0, 36)
 size = Vector2i(520, 320)
 min_size = Vector2i(520, 320)
 
-[node name="VBox" type="VBoxContainer" parent="AutoPopup"]
+[node name="VBox" type="VBoxContainer" parent="AutoPopup" unique_id=1207017673]
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="TitleLabel" type="Label" parent="AutoPopup/VBox"]
+[node name="TitleLabel" type="Label" parent="AutoPopup/VBox" unique_id=1462347232]
 layout_mode = 2
 text = "Auto/Filter"
 
-[node name="RowBatch" type="HBoxContainer" parent="AutoPopup/VBox"]
+[node name="RowBatch" type="HBoxContainer" parent="AutoPopup/VBox" unique_id=983360900]
 layout_mode = 2
 
-[node name="BatchLabel" type="Label" parent="AutoPopup/VBox/RowBatch"]
+[node name="BatchLabel" type="Label" parent="AutoPopup/VBox/RowBatch" unique_id=1372197608]
 layout_mode = 2
 text = "Keys per batch:"
 
-[node name="BatchOption" type="OptionButton" parent="AutoPopup/VBox/RowBatch"]
+[node name="BatchOption" type="OptionButton" parent="AutoPopup/VBox/RowBatch" unique_id=1576748050]
 layout_mode = 2
 
-[node name="LockInfoLabel" type="Label" parent="AutoPopup/VBox"]
+[node name="LockInfoLabel" type="Label" parent="AutoPopup/VBox" unique_id=1883193051]
 layout_mode = 2
 
-[node name="RowRarity" type="HBoxContainer" parent="AutoPopup/VBox"]
+[node name="RowRarity" type="HBoxContainer" parent="AutoPopup/VBox" unique_id=1154831494]
 layout_mode = 2
 
-[node name="RarityLabel" type="Label" parent="AutoPopup/VBox/RowRarity"]
+[node name="RarityLabel" type="Label" parent="AutoPopup/VBox/RowRarity" unique_id=1772525319]
 layout_mode = 2
 text = "Keep/Show >:"
 
-[node name="RarityOption" type="OptionButton" parent="AutoPopup/VBox/RowRarity"]
+[node name="RarityOption" type="OptionButton" parent="AutoPopup/VBox/RowRarity" unique_id=278017505]
 layout_mode = 2
 
-[node name="AutoSellCheck" type="CheckButton" parent="AutoPopup/VBox"]
+[node name="AutoSellCheck" type="CheckButton" parent="AutoPopup/VBox" unique_id=2080864235]
 layout_mode = 2
 text = "Auto-sell below threshold"
 
-[node name="CooldownLabel" type="Label" parent="AutoPopup/VBox"]
+[node name="CooldownLabel" type="Label" parent="AutoPopup/VBox" unique_id=1656744552]
 layout_mode = 2
 text = "Cooldown: Xs"
 
-[node name="AutoStatusLabel" type="Label" parent="AutoPopup/VBox"]
+[node name="AutoStatusLabel" type="Label" parent="AutoPopup/VBox" unique_id=214913472]
 layout_mode = 2
 text = "Auto: Off"
 
-[node name="StartStopButton" type="Button" parent="AutoPopup/VBox"]
+[node name="StartStopButton" type="Button" parent="AutoPopup/VBox" unique_id=481704084]
 layout_mode = 2
 text = "Start Auto"
 
-[node name="CloseButton" type="Button" parent="AutoPopup/VBox"]
+[node name="CloseButton" type="Button" parent="AutoPopup/VBox" unique_id=945659039]
 layout_mode = 2
 text = "Close"
 
-[node name="CrucibleUpgradePopup" type="Window" parent="."]
-oversampling_override = 1.0
-size = Vector2i(100, 700)
-visible = false
-min_size = Vector2i(0, 700)
-script = ExtResource("5_qhh6x")
-
-[node name="VBox" type="VBoxContainer" parent="CrucibleUpgradePopup"]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="TitleLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
-layout_mode = 2
-
-[node name="StatusLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
-layout_mode = 2
-
-[node name="ProgressLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
-layout_mode = 2
-
-[node name="PaymentHint" type="Label" parent="CrucibleUpgradePopup/VBox"]
-layout_mode = 2
-text = "Pay to unlock upgrade"
-
-[node name="PaymentRow" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox"]
-custom_minimum_size = Vector2(0, 22)
-layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="PaymentBar" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox/PaymentRow"]
-custom_minimum_size = Vector2(0, 18)
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="PayButton" type="Button" parent="CrucibleUpgradePopup/VBox/PaymentRow"]
-custom_minimum_size = Vector2(164, 0)
-layout_mode = 2
-
-[node name="OddsHeader" type="Label" parent="CrucibleUpgradePopup/VBox"]
-layout_mode = 2
-
-[node name="OddsScroll" type="ScrollContainer" parent="CrucibleUpgradePopup/VBox"]
-custom_minimum_size = Vector2(0, 260)
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="OddsGrid" type="GridContainer" parent="CrucibleUpgradePopup/VBox/OddsScroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-theme_override_constants/h_separation = 10
-theme_override_constants/v_separation = 6
-columns = 3
-
-[node name="UpgradeProgress" type="ProgressBar" parent="CrucibleUpgradePopup/VBox"]
-visible = false
-layout_mode = 2
-
-[node name="TimeLabel" type="Label" parent="CrucibleUpgradePopup/VBox"]
-visible = false
-layout_mode = 2
-
-[node name="VoucherRow" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox"]
-layout_mode = 2
-
-[node name="UseVoucherButton" type="Button" parent="CrucibleUpgradePopup/VBox/VoucherRow"]
-custom_minimum_size = Vector2(132, 0)
-layout_mode = 2
-text = "Use Voucher"
-
-[node name="VoucherLabel" type="Label" parent="CrucibleUpgradePopup/VBox/VoucherRow"]
-layout_mode = 2
-text = "Time Vouchers: X"
-
-[node name="ButtonsRow" type="HBoxContainer" parent="CrucibleUpgradePopup/VBox"]
-layout_mode = 2
-
-[node name="CloseButton" type="Button" parent="CrucibleUpgradePopup/VBox/ButtonsRow"]
-layout_mode = 2
-text = "Close"
-
-[node name="VoucherPopup" type="Window" parent="."]
+[node name="VoucherPopup" type="Window" parent="." unique_id=1250907914]
 oversampling_override = 1.0
 position = Vector2i(0, 36)
 always_on_top = true
 
-[node name="VBox" type="VBoxContainer" parent="VoucherPopup"]
+[node name="VBox" type="VBoxContainer" parent="VoucherPopup" unique_id=1574511546]
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="TitleLabel" type="Label" parent="VoucherPopup/VBox"]
+[node name="TitleLabel" type="Label" parent="VoucherPopup/VBox" unique_id=713977555]
 layout_mode = 2
 text = "Speed Up"
 
-[node name="InfoLabel" type="Label" parent="VoucherPopup/VBox"]
+[node name="InfoLabel" type="Label" parent="VoucherPopup/VBox" unique_id=126488408]
 layout_mode = 2
 text = "Remaing: 25:00 | You have 12 Vouchers"
 
-[node name="Row" type="HBoxContainer" parent="VoucherPopup/VBox"]
+[node name="Row" type="HBoxContainer" parent="VoucherPopup/VBox" unique_id=1344273698]
 layout_mode = 2
 
-[node name="MinusButton" type="Button" parent="VoucherPopup/VBox/Row"]
+[node name="MinusButton" type="Button" parent="VoucherPopup/VBox/Row" unique_id=1946755363]
 layout_mode = 2
 text = "-"
 
-[node name="CountEdit" type="LineEdit" parent="VoucherPopup/VBox/Row"]
+[node name="CountEdit" type="LineEdit" parent="VoucherPopup/VBox/Row" unique_id=1860490400]
 layout_mode = 2
 placeholder_text = "0"
 
-[node name="PlusButton" type="Button" parent="VoucherPopup/VBox/Row"]
+[node name="PlusButton" type="Button" parent="VoucherPopup/VBox/Row" unique_id=351718936]
 layout_mode = 2
 text = "+"
 
-[node name="MaxButton" type="Button" parent="VoucherPopup/VBox/Row"]
+[node name="MaxButton" type="Button" parent="VoucherPopup/VBox/Row" unique_id=1331109626]
 layout_mode = 2
 text = "Max"
 
-[node name="UseLabel" type="Label" parent="VoucherPopup/VBox"]
+[node name="UseLabel" type="Label" parent="VoucherPopup/VBox" unique_id=2112154179]
 layout_mode = 2
 text = "Speed Up: 00:00"
 
-[node name="ButtonsRow" type="HBoxContainer" parent="VoucherPopup/VBox"]
+[node name="ButtonsRow" type="HBoxContainer" parent="VoucherPopup/VBox" unique_id=318990354]
 layout_mode = 2
 
-[node name="UseButton" type="Button" parent="VoucherPopup/VBox/ButtonsRow"]
+[node name="UseButton" type="Button" parent="VoucherPopup/VBox/ButtonsRow" unique_id=1684511607]
 layout_mode = 2
 text = "Use"
 
-[node name="CancelButton" type="Button" parent="VoucherPopup/VBox/ButtonsRow"]
+[node name="CancelButton" type="Button" parent="VoucherPopup/VBox/ButtonsRow" unique_id=62851045]
 layout_mode = 2
 text = "Cancel"
 
-[node name="DevPopup" type="Window" parent="."]
+[node name="DevPopup" type="Window" parent="." unique_id=917486129]
 oversampling_override = 1.0
 visible = false
 script = ExtResource("7_y282l")
 
-[node name="VBox" type="VBoxContainer" parent="DevPopup"]
+[node name="VBox" type="VBoxContainer" parent="DevPopup" unique_id=620318271]
 offset_right = 40.0
 offset_bottom = 40.0
 
-[node name="TitleLabel" type="Label" parent="DevPopup/VBox"]
+[node name="TitleLabel" type="Label" parent="DevPopup/VBox" unique_id=427350764]
 layout_mode = 2
 text = "Dev Tools"
 
-[node name="GiveRow" type="HBoxContainer" parent="DevPopup/VBox"]
+[node name="GiveRow" type="HBoxContainer" parent="DevPopup/VBox" unique_id=834422077]
 layout_mode = 2
 
-[node name="GiveSelect" type="OptionButton" parent="DevPopup/VBox/GiveRow"]
+[node name="GiveSelect" type="OptionButton" parent="DevPopup/VBox/GiveRow" unique_id=729126314]
 layout_mode = 2
 
-[node name="AmountEdit" type="LineEdit" parent="DevPopup/VBox/GiveRow"]
+[node name="AmountEdit" type="LineEdit" parent="DevPopup/VBox/GiveRow" unique_id=913250433]
 layout_mode = 2
 placeholder_text = "Amount"
 
-[node name="GiveButton" type="Button" parent="DevPopup/VBox/GiveRow"]
+[node name="GiveButton" type="Button" parent="DevPopup/VBox/GiveRow" unique_id=1468687348]
 layout_mode = 2
 text = "Give"
 
-[node name="Separator1" type="HSeparator" parent="DevPopup/VBox"]
+[node name="Separator1" type="HSeparator" parent="DevPopup/VBox" unique_id=1509980512]
 layout_mode = 2
 
-[node name="BattleTitle" type="Label" parent="DevPopup/VBox"]
+[node name="BattleTitle" type="Label" parent="DevPopup/VBox" unique_id=274114829]
 layout_mode = 2
 text = "Set Battle Position"
 
-[node name="BattleRow" type="HBoxContainer" parent="DevPopup/VBox"]
+[node name="BattleRow" type="HBoxContainer" parent="DevPopup/VBox" unique_id=673138749]
 layout_mode = 2
 
-[node name="DifficultySelect" type="OptionButton" parent="DevPopup/VBox/BattleRow"]
+[node name="DifficultySelect" type="OptionButton" parent="DevPopup/VBox/BattleRow" unique_id=962042181]
 layout_mode = 2
 
-[node name="LevelSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow"]
+[node name="LevelSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow" unique_id=233040916]
 layout_mode = 2
 
-[node name="StageSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow"]
+[node name="StageSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow" unique_id=816665004]
 layout_mode = 2
 
-[node name="WaveSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow"]
+[node name="WaveSpin" type="SpinBox" parent="DevPopup/VBox/BattleRow" unique_id=534464259]
 layout_mode = 2
 
-[node name="SetBattleButton" type="Button" parent="DevPopup/VBox/BattleRow"]
+[node name="SetBattleButton" type="Button" parent="DevPopup/VBox/BattleRow" unique_id=1695695407]
 layout_mode = 2
 text = "Set"
 
-[node name="BattlePreview" type="Label" parent="DevPopup/VBox"]
+[node name="BattlePreview" type="Label" parent="DevPopup/VBox" unique_id=1147003964]
 layout_mode = 2
 text = "Preview: Easy - Lv 1 - Stage1 - Wave 1"
 
-[node name="Separator2" type="HSeparator" parent="DevPopup/VBox"]
+[node name="Separator2" type="HSeparator" parent="DevPopup/VBox" unique_id=1335908363]
 layout_mode = 2
 
-[node name="LevelSelectRow" type="HBoxContainer" parent="DevPopup/VBox"]
+[node name="LevelSelectRow" type="HBoxContainer" parent="DevPopup/VBox" unique_id=91072344]
 layout_mode = 2
 
-[node name="LevelLabel" type="Label" parent="DevPopup/VBox/LevelSelectRow"]
+[node name="LevelLabel" type="Label" parent="DevPopup/VBox/LevelSelectRow" unique_id=937582167]
 layout_mode = 2
 text = "Character Level: "
 
-[node name="LevelSpinBox" type="SpinBox" parent="DevPopup/VBox/LevelSelectRow"]
+[node name="LevelSpinBox" type="SpinBox" parent="DevPopup/VBox/LevelSelectRow" unique_id=1051488111]
 layout_mode = 2
 min_value = 1.0
 max_value = 9999.0
 value = 1.0
 
-[node name="SetLevelButton" type="Button" parent="DevPopup/VBox/LevelSelectRow"]
+[node name="SetLevelButton" type="Button" parent="DevPopup/VBox/LevelSelectRow" unique_id=998130919]
 layout_mode = 2
 text = "Set Level"
 
-[node name="Separator3" type="HSeparator" parent="DevPopup/VBox"]
+[node name="Separator3" type="HSeparator" parent="DevPopup/VBox" unique_id=489869633]
 layout_mode = 2
 
-[node name="CloseButton" type="Button" parent="DevPopup/VBox"]
+[node name="CloseButton" type="Button" parent="DevPopup/VBox" unique_id=185262878]
 layout_mode = 2
 text = "Close"
